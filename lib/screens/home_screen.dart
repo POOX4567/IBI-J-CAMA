@@ -60,24 +60,31 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                children: [
+                  Image.asset('assets/logo.png', width: 100, height: 100),
 
-                children: const [
-                  Text(
-                    "IBI Jícama",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  const SizedBox(width: 12),
 
-                  SizedBox(height: 5),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "IBI Jícama",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
-                  Text(
-                    "Dashboard General",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                      SizedBox(height: 5),
+
+                      Text(
+                        "Dashboard General",
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                    ],
                   ),
                 ],
               ),
