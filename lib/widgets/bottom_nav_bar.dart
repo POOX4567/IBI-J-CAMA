@@ -4,8 +4,6 @@ import '../screens/horarios_screen.dart';
 import '../screens/invernaderos_screen.dart';
 import '../screens/empleados_screen.dart';
 import '../screens/alertas_screen.dart';
-import '../screens/screens_solicitudes_mantenimiento/maintenance_requests_screen.dart';
-import '../screens//screens_solicitudes_mantenimiento/technical_supervision_screen.dart';
 
 class BottomNavBar extends StatefulWidget {
   const BottomNavBar({super.key});
@@ -23,8 +21,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
     const InvernaderosScreen(),
     const EmpleadosScreen(),
     const AlertasScreen(),
-    const MaintenanceRequestsScreen(),
-    const TechnicalSupervisionScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -46,8 +42,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
         backgroundColor: Colors.white,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(
@@ -62,14 +56,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
           BottomNavigationBarItem(
             icon: Icon(Icons.notifications_active),
             label: 'Alertas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.handyman),
-            label: 'Mant.', // Abreviado por el límite de espacio
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fact_check),
-            label: 'Superv.', // Abreviado por el límite de espacio
           ),
         ],
       ),
