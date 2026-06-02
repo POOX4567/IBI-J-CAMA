@@ -11,7 +11,7 @@ import 'screens_areas/area_detail_screen.dart';
 
 import '../widgets/area_card.dart';
 import '../widgets/notificacion_card.dart';
-import '../widgets/dashboard_stat_card.dart';
+import '../widgets/widgets_dashboard/dashboard_stat_card.dart';
 import '../widgets/filtro_chip_widget.dart';
 import 'screens_areas/area_historial_screen.dart';
 
