@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../screens/screens_dashboard/reports_page.dart';
+import '../../screens/screen_reports/reports_page.dart';
 
 class SectionTitle extends StatelessWidget {
   final String title;
