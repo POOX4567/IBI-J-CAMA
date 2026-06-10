@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
+import 'package:ibi/utils/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   runApp(const MyApp());
 }
 

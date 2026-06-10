@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../widgets/widgets_dashboard/report_widgets.dart';
+import '../screen_reports/report_widgets.dart';
 
 class AttendanceReportPage extends StatelessWidget {
   const AttendanceReportPage({super.key});
