@@ -75,6 +75,8 @@
 	<key>LSApplicationQueriesSchemes</key>
 		<array>
   			<string>tel</string>
-</array>
+		</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+    	<string>Necesitamos acceso a tu ubicación para calcular la distancia hasta los dispositivos con fallas.</string>
 </dict>
 </plist>

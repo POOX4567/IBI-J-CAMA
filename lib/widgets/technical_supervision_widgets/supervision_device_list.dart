@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:geolocator/geolocator.dart'; // Importamos el plugin de geolocalización
 import 'package:ibi/data/mock_data.dart';
+import 'package:ibi/utils/notification_service.dart';
 import '../../utils/supervision_helpers.dart';
 
 class SupervisionDeviceList extends StatelessWidget {
@@ -14,6 +16,82 @@ class SupervisionDeviceList extends StatelessWidget {
     required this.currentFilter,
     required this.onFilterChanged,
   }) : super(key: key);
+
+  // --- NUEVA FUNCIÓN DE GEOLOCALIZACIÓN ---
+  Future<void> _ubicarDispositivo(
+    BuildContext context,
+    IotDevice device,
+  ) async {
+    // 1. Mostrar un aviso visual de que estamos buscando la señal GPS
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Buscando señal GPS para ubicar ${device.name}...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      // 2. Verificar si el servicio GPS está encendido en el teléfono
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Por favor enciende el GPS del teléfono.';
+      }
+
+      // 3. Verificar y pedir permisos
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw 'Los permisos de ubicación fueron denegados.';
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw 'Los permisos están denegados permanentemente en la configuración.';
+      }
+
+      // 4. Obtener la posición actual (Tarda unos segundos)
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // 5. Coordenadas ficticias del invernadero o dispositivo (Ejemplo genérico)
+      double latDispositivo = 20.8333;
+      double lngDispositivo = -89.9833;
+
+      // 6. Calcular distancia real en metros
+      double distanciaMetros = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        latDispositivo,
+        lngDispositivo,
+      );
+
+      // Convertimos a kilómetros con 2 decimales
+      String distanciaKm = (distanciaMetros / 1000).toStringAsFixed(2);
+
+      // Verificamos que el widget siga montado antes de mostrar el resultado
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(LucideIcons.mapPin, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('📍 Estás a $distanciaKm km del dispositivo'),
+            ],
+          ),
+          backgroundColor: Colors.green[800],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red[800]),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +195,40 @@ class SupervisionDeviceList extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+
+                    // --- NUEVO BOTÓN DE UBICACIÓN ---
+                    IconButton(
+                      icon: const Icon(
+                        LucideIcons.mapPin,
+                        size: 18,
+                        color: Colors.blue,
+                      ),
+                      onPressed: () => _ubicarDispositivo(context, device),
+                      tooltip: "Ubicar dispositivo",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(
+                        LucideIcons.bellRing,
+                        size: 18,
+                        color: Colors.red,
+                      ),
+                      onPressed: () async {
+                        // 1. Pedimos permiso (solo sale la ventana la primera vez)
+                        await NotificationService.solicitarPermisos();
+                        // 2. Disparamos la alerta
+                        await NotificationService.mostrarAlertaFalla(
+                          device.name,
+                          device.greenhouse,
+                        );
+                      },
+                      tooltip: "Simular Alerta Crítica",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
