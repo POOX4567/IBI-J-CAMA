@@ -12,6 +12,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // 1. CORRECCIÓN: Sintaxis correcta para Kotlin DSL
+        isCoreLibraryDesugaringEnabled = true 
     }
 
     defaultConfig {
@@ -23,6 +25,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // 2. CORRECCIÓN: Habilitamos multidex para soportar los nuevos plugins
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -42,4 +47,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// 3. CORRECCIÓN: Este es el bloque que le dice a Android de dónde descargar la librería
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
