@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+// Rutas de tus pantallas y componentes corporativos
 import '../screens/screens_dashboard/resumen_page.dart';
 import '../widgets/dashboard_header.dart';
+// Ruta corregida a la carpeta donde decidiste guardar tu Provider local
+import '../../services/resumen_provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -14,13 +18,23 @@ class HomeScreen extends StatelessWidget {
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // Encabezado corporativo del invernadero
               const DashboardHeader(
                 title: "IBI Jícama",
                 subtitle: "Dashboard General",
                 logoPath: "assets/logo.png",
               ),
 
-              const Padding(padding: EdgeInsets.all(16), child: ResumenPage()),
+              // Envoltura con Padding para que las tarjetas y secciones respiren
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ChangeNotifierProvider(
+                  // Adaptado: Se crea el provider de forma directa en memoria
+                  // Ya no necesita el "..fetchSummaryData()" porque los datos se cargan solitos al nacer
+                  create: (context) => ResumenProvider(),
+                  child: const ResumenPage(),
+                ),
+              ),
             ],
           ),
         ),

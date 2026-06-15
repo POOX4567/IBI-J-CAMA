@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart'; // 📊 Plugin inyectado para las gráficas
+import 'package:ibi/models/incident_model.dart';
+import 'package:ibi/services/incident_service.dart';
 
-class IncidentsReportPage extends StatelessWidget {
+class IncidentsReportPage extends StatefulWidget {
   const IncidentsReportPage({super.key});
+
+  @override
+  State<IncidentsReportPage> createState() => _IncidentsReportPageState();
+}
+
+class _IncidentsReportPageState extends State<IncidentsReportPage> {
+  final IncidentService _incidentService = IncidentService();
+  late Future<List<IncidentModel>> _incidentsFuture;
 
   static const Color primaryRed = Color(0xFFB71C1C);
   static const Color lightRed = Color(0xFFFF5252);
@@ -9,87 +20,30 @@ class IncidentsReportPage extends StatelessWidget {
   static const Color background = Color(0xFFF5F6FA);
 
   @override
-  Widget build(BuildContext context) {
-    // 1. ORIGEN DE DATOS REALES DE INCIDENCIAS
-    final List<Map<String, dynamic>> incidents = [
-      {
-        "title": "Falla en sistema eléctrico",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Invernadero Norte",
-      },
-      {
-        "title": "Sensor de humedad desconectado",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Sur",
-      },
-      {
-        "title": "Fuga de agua detectada",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Zona de riego",
-      },
-      {
-        "title": "Mantenimiento preventivo",
-        "severity": "Baja",
-        "status": "Resuelto",
-        "area": "Área general",
-      },
-      {
-        "title": "Temperatura fuera de rango",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Este",
-      },
-    ];
+  void initState() {
+    super.initState();
+    // Inicializamos la carga al crear el estado de la página
+    _incidentsFuture = _incidentService.fetchIncidents();
+  }
 
-    // --- CÁLCULOS EN TIEMPO REAL ---
-    int abiertas = incidents.where((i) => i["status"] == "Abierto").length;
-    int enProceso = incidents.where((i) => i["status"] == "En proceso").length;
-    int resueltas = incidents.where((i) => i["status"] == "Resuelto").length;
-    int criticas = incidents.where((i) => i["severity"] == "Alta").length;
-
-    Color getSeverityColor(String severity) {
-      switch (severity) {
-        case "Alta":
-          return Colors.red.shade900;
-        case "Media":
-          return Colors.orange.shade800;
-        default:
-          return Colors.green.shade700;
-      }
-    }
-
-    Color getStatusColor(String status) {
-      switch (status) {
-        case "Abierto":
-          return Colors.red;
-        case "En proceso":
-          return Colors.orange;
-        default:
-          return Colors.green;
-      }
-    }
-
-    void mostrarAvisoIncidencia(Map<String, dynamic> inc) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "⚠️ ALERTA: ${inc['title']}\n📍 Ubicación: ${inc['area']} • Estatus: [${inc['status']}]",
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-          ),
-          backgroundColor: textDark,
-          duration: const Duration(seconds: 4),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+  void _mostrarAvisoIncidencia(IncidentModel incident) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "⚠️ ALERTA: ${incident.title}\n📍 Ubicación: ${incident.area} • Estatus: [${incident.status}]",
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
         ),
-      );
-    }
+        backgroundColor: textDark,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
@@ -128,194 +82,237 @@ class IncidentsReportPage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Resumen de incidencias",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textDark,
-              ),
-            ),
-            const SizedBox(height: 12),
+      body: FutureBuilder<List<IncidentModel>>(
+        future: _incidentsFuture,
+        builder: (context, snapshot) {
+          // ⏳ Cargando datos...
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: primaryRed),
+            );
+          }
+          // ❌ Control de excepciones
+          if (snapshot.hasError) {
+            return Center(
+              child: Text("Error al cargar incidencias: ${snapshot.error}"),
+            );
+          }
+          // 🚫 No hay datos disponibles
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text("No existen incidencias reportadas."),
+            );
+          }
 
-            // KPIs Calculados dinámicamente
-            Row(
+          final List<IncidentModel> incidents = snapshot.data!;
+
+          // --- CÁLCULOS DINÁMICOS SOBRE MODELOS ---
+          int abiertas = incidents.where((i) => i.status == "Abierto").length;
+          int enProceso = incidents
+              .where((i) => i.status == "En proceso")
+              .length;
+          int resueltas = incidents.where((i) => i.status == "Resuelto").length;
+          int criticas = incidents.where((i) => i.severity == "Alta").length;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _localKpiCard(
-                  title: "Abiertas",
-                  value: abiertas.toString(),
-                  color: Colors.red,
-                  icon: Icons.error,
-                ),
-                const SizedBox(width: 10),
-                _localKpiCard(
-                  title: "En proceso",
-                  value: enProceso.toString(),
-                  color: Colors.orange,
-                  icon: Icons.autorenew,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _localKpiCard(
-                  title: "Resueltas",
-                  value: resueltas.toString(),
-                  color: Colors.green,
-                  icon: Icons.check_circle,
-                ),
-                const SizedBox(width: 10),
-                _localKpiCard(
-                  title: "Críticas",
-                  value: criticas.toString(),
-                  color: Colors.deepPurple,
-                  icon: Icons.warning,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-            const Text(
-              "Incidencias por tipo",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textDark,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _localChartPlaceholder("Distribución de incidencias"),
-
-            const SizedBox(height: 24),
-            const Text(
-              "Registro de incidencias",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textDark,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 35,
-                  showCheckboxColumn: false,
-                  headingRowColor: WidgetStateProperty.all(
-                    Colors.grey.shade200,
+                const Text(
+                  "Resumen de incidencias",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
                   ),
-                  columns: const [
-                    DataColumn(
-                      label: Text(
-                        "Incidencia",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                ),
+                const SizedBox(height: 12),
+
+                // KPIs
+                Row(
+                  children: [
+                    _localKpiCard(
+                      title: "Abiertas",
+                      value: abiertas.toString(),
+                      color: Colors.red,
+                      icon: Icons.error,
                     ),
-                    DataColumn(
-                      label: Text(
-                        "Severidad",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        "Estado",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        "Área",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                    const SizedBox(width: 10),
+                    _localKpiCard(
+                      title: "En proceso",
+                      value: enProceso.toString(),
+                      color: Colors.orange,
+                      icon: Icons.autorenew,
                     ),
                   ],
-                  rows: incidents.map((i) {
-                    final severityColor = getSeverityColor(i["severity"]);
-                    final statusColor = getStatusColor(i["status"]);
-
-                    return DataRow(
-                      onSelectChanged: (_) => mostrarAvisoIncidencia(i),
-                      cells: [
-                        DataCell(
-                          Text(
-                            i["title"],
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: severityColor.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              i["severity"],
-                              style: TextStyle(
-                                color: severityColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              i["status"],
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(Text(i["area"])),
-                      ],
-                    );
-                  }).toList(),
                 ),
-              ),
-            ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _localKpiCard(
+                      title: "Resueltas",
+                      value: resueltas.toString(),
+                      color: Colors.green,
+                      icon: Icons.check_circle,
+                    ),
+                    const SizedBox(width: 10),
+                    _localKpiCard(
+                      title: "Críticas",
+                      value: criticas.toString(),
+                      color: Colors.deepPurple,
+                      icon: Icons.warning,
+                    ),
+                  ],
+                ),
 
-            const SizedBox(height: 24),
-            const Text(
-              "Acciones",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textDark,
-              ),
+                const SizedBox(height: 24),
+                const Text(
+                  "Distribución por Estatus",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 📊 Renderizado de la gráfica real usando el plugin fl_chart
+                _localRealChart(
+                  abiertas: abiertas,
+                  enProceso: enProceso,
+                  resueltas: resueltas,
+                ),
+
+                const SizedBox(height: 24),
+                const Text(
+                  "Registro de incidencias",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Data Table de registros
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columnSpacing: 35,
+                      showCheckboxColumn: false,
+                      headingRowColor: WidgetStateProperty.all(
+                        Colors.grey.shade200,
+                      ),
+                      columns: const [
+                        DataColumn(
+                          label: Text(
+                            "Incidencia",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        DataColumn(
+                          label: Text(
+                            "Severidad",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        DataColumn(
+                          label: Text(
+                            "Estado",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        DataColumn(
+                          label: Text(
+                            "Área",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                      rows: incidents.map((incident) {
+                        return DataRow(
+                          onSelectChanged: (_) =>
+                              _mostrarAvisoIncidencia(incident),
+                          cells: [
+                            DataCell(
+                              Text(
+                                incident.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: incident.severityColor.withOpacity(
+                                    0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  incident.severity,
+                                  style: TextStyle(
+                                    color: incident.severityColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: incident.statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  incident.status,
+                                  style: TextStyle(
+                                    color: incident.statusColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(Text(incident.area)),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                const Text(
+                  "Acciones",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _localExportButtons(context, "incidencias"),
+              ],
             ),
-            const SizedBox(height: 12),
-            _localExportButtons(context, "incidencias"),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -366,34 +363,107 @@ class IncidentsReportPage extends StatelessWidget {
     );
   }
 
-  Widget _localChartPlaceholder(String title) {
+  // Widget gráfico con fl_chart implementado usando datos dinámicos reales
+  Widget _localRealChart({
+    required int abiertas,
+    required int enProceso,
+    required int resueltas,
+  }) {
+    int total = abiertas + enProceso + resueltas;
     return Container(
-      height: 160,
-      width: double.infinity,
+      height: 180,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
-          Icon(
-            Icons.donut_large_rounded,
-            size: 36,
-            color: primaryRed.withOpacity(0.5),
+          Expanded(
+            flex: 4,
+            child: total == 0
+                ? const Center(child: Text("Sin registros"))
+                : PieChart(
+                    PieChartData(
+                      sectionsSpace: 4,
+                      centerSpaceRadius: 40,
+                      sections: [
+                        PieChartSectionData(
+                          color: Colors.red,
+                          value: abiertas.toDouble(),
+                          title: '$abiertas',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          color: Colors.orange,
+                          value: enProceso.toDouble(),
+                          title: '$enProceso',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          color: Colors.green,
+                          value: resueltas.toDouble(),
+                          title: '$resueltas',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: textDark,
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 5,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _chartIndicator(color: Colors.red, text: "Abiertos"),
+                const SizedBox(height: 6),
+                _chartIndicator(color: Colors.orange, text: "En proceso"),
+                const SizedBox(height: 6),
+                _chartIndicator(color: Colors.green, text: "Resueltos"),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _chartIndicator({required Color color, required String text}) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: textDark,
+          ),
+        ),
+      ],
     );
   }
 

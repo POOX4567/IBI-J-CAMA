@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+// Tus rutas de componentes importadas
 import '../../widgets/widgets_dashboard/cards.dart';
 import '../../widgets/widgets_dashboard/common_widgets.dart';
+// Nuevas importaciones de arquitectura
+import '../../services/resumen_provider.dart';
 
 class ResumenPage extends StatelessWidget {
   const ResumenPage({super.key});
 
-  // Función privada para mostrar la alerta con los datos al tocar la tarjeta
   void _mostrarDetalles(BuildContext context, String titulo, String mensaje) {
     showDialog(
       context: context,
@@ -39,6 +42,14 @@ class ResumenPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchamos de manera reactiva el proveedor de datos local
+    final resumenData = context.watch<ResumenProvider>();
+
+    final inv = resumenData.tarjetasPrincipales['invernaderos']!;
+    final emp = resumenData.tarjetasPrincipales['empleados']!;
+    final ale = resumenData.tarjetasPrincipales['alertas']!;
+    final mant = resumenData.tarjetasPrincipales['mantenimiento']!;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -46,9 +57,9 @@ class ResumenPage extends StatelessWidget {
           "Estado General",
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-
         const SizedBox(height: 20),
 
+        // 1. Grid de Métricas Principales consumiendo del Provider
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -58,182 +69,122 @@ class ResumenPage extends StatelessWidget {
           childAspectRatio: 1,
           children: [
             InfoCard(
-              title: "Invernaderos",
-              value: "10/12",
-              subtitle: "Activos",
+              title: inv.titulo,
+              value: inv.valor,
+              subtitle: inv.subtitulo,
               icon: Icons.eco,
               color: Colors.green,
               onTap: () => _mostrarDetalles(
                 context,
                 "Invernaderos Activos",
-                "Detalle: 10 invernaderos están en producción óptima. Los invernaderos 4 y 9 están detenidos temporalmente.",
+                inv.detalleAlerta,
               ),
             ),
-
             InfoCard(
-              title: "Empleados",
-              value: "28/48",
-              subtitle: "En turno",
+              title: emp.titulo,
+              value: emp.valor,
+              subtitle: emp.subtitulo,
               icon: Icons.people,
               color: Colors.blue,
-              onTap: () => _mostrarDetalles(
-                context,
-                "Personal en Turno",
-                "Detalle: 28 empleados se encuentran en las instalaciones. Próximo cambio de turno en 2 horas.",
-              ),
+              onTap: () =>
+                  _mostrarDetalles(context, emp.titulo, emp.detalleAlerta),
             ),
-
             InfoCard(
-              title: "Alertas",
-              value: "5",
-              subtitle: "Activas",
+              title: ale.titulo,
+              value: ale.valor,
+              subtitle: ale.subtitulo,
               icon: Icons.warning,
               color: Colors.red,
-              onTap: () => _mostrarDetalles(
-                context,
-                "Alertas Críticas",
-                "Detalle: Hay 5 problemas detectados en los sensores. Por favor revisa la sección de Alertas Importantes.",
-              ),
+              onTap: () =>
+                  _mostrarDetalles(context, ale.titulo, ale.detalleAlerta),
             ),
-
             InfoCard(
-              title: "Mantenimiento",
-              value: "8",
-              subtitle: "Pendientes",
+              title: mant.titulo,
+              value: mant.valor,
+              subtitle: mant.subtitulo,
               icon: Icons.build,
               color: Colors.orange,
-              onTap: () => _mostrarDetalles(
-                context,
-                "Tareas Pendientes",
-                "Detalle: Hay 8 órdenes de mantenimiento asignadas para el día de hoy. 3 son de alta prioridad.",
-              ),
+              onTap: () =>
+                  _mostrarDetalles(context, mant.titulo, mant.detalleAlerta),
             ),
           ],
         ),
-
         const SizedBox(height: 30),
 
         const SectionTitle(title: "Alertas Importantes"),
-
         const SizedBox(height: 15),
 
-        AlertCard(
-          title: "Temperatura Alta",
-          subtitle: "Invernadero 2",
-          color: Colors.red,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Alerta: Invernadero 2",
-            "La temperatura superó el umbral permitido alcanzando los 38°C. Sistema de ventilación automática activado.",
+        // 2. Alertas Importantes mapeadas dinámicamente
+        ...resumenData.alertasImportantes.map(
+          (alerta) => AlertCard(
+            title: alerta.titulo,
+            subtitle: alerta.subtitulo,
+            color: alerta.titulo.contains("Temperatura")
+                ? Colors.red
+                : (alerta.titulo.contains("Riego")
+                      ? Colors.orange
+                      : Colors.blue),
+            onTap: () => _mostrarDetalles(
+              context,
+              "Alerta: ${alerta.subtitulo}",
+              alerta.detalleAlerta,
+            ),
           ),
         ),
-
-        AlertCard(
-          title: "Falla de Riego",
-          subtitle: "Zona Norte",
-          color: Colors.orange,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Alerta: Zona Norte",
-            "Pérdida de presión detectada en la tubería principal de riego sector 3.",
-          ),
-        ),
-
-        AlertCard(
-          title: "Sensor Desconectado",
-          subtitle: "Invernadero 5",
-          color: Colors.blue,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Alerta: Invernadero 5",
-            "El sensor de humedad del suelo dejó de enviar datos. Posible falla de batería.",
-          ),
-        ),
-
         const SizedBox(height: 30),
 
         const SectionTitle(title: "Resumen de Actividad"),
-
         const SizedBox(height: 15),
 
-        SummaryCard(
-          title: "Actividad Diaria",
-          subtitle: "25 eventos registrados",
-          icon: Icons.today,
-          color: Colors.green,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Historial Diario",
-            "Se registraron 12 riegos automáticos, 5 logs de acceso y 8 mediciones climáticas manuales.",
+        // 3. Resumen de Actividades mapeado dinámicamente
+        ...resumenData.resumenActividad.map(
+          (resumen) => SummaryCard(
+            title: resumen.titulo,
+            subtitle: resumen.subtitulo,
+            icon: resumen.titulo.contains("Diaria")
+                ? Icons.today
+                : (resumen.titulo.contains("Semanal")
+                      ? Icons.calendar_view_week
+                      : Icons.calendar_month),
+            color: resumen.titulo.contains("Diaria")
+                ? Colors.green
+                : (resumen.titulo.contains("Semanal")
+                      ? Colors.blue
+                      : Colors.orange),
+            onTap: () => _mostrarDetalles(
+              context,
+              resumen.titulo,
+              resumen.detalleAlerta,
+            ),
           ),
         ),
-
-        SummaryCard(
-          title: "Actividad Semanal",
-          subtitle: "148 eventos registrados",
-          icon: Icons.calendar_view_week,
-          color: Colors.blue,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Historial Semanal",
-            "Rendimiento de alertas resueltas esta semana: 92% de efectividad.",
-          ),
-        ),
-
-        SummaryCard(
-          title: "Actividad Mensual",
-          subtitle: "620 eventos registrados",
-          icon: Icons.calendar_month,
-          color: Colors.orange,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Historial Mensual",
-            "Resumen de producción: 14 toneladas cosechadas y procesadas con éxito durante el mes.",
-          ),
-        ),
-
         const SizedBox(height: 30),
 
         const SectionTitle(title: "Actividad Reciente"),
-
         const SizedBox(height: 15),
 
-        ActivityCard(
-          icon: Icons.build,
-          title: "Mantenimiento realizado",
-          time: "Hace 1 hora",
-          color: Colors.blue,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Log de Mantenimiento",
-            "El técnico cambió el extractor de aire dañado en el Invernadero 1.",
+        // 4. Historial Reciente mapeado dinámicamente
+        ...resumenData.actividadReciente.map(
+          (actividad) => ActivityCard(
+            icon: actividad.titulo.contains("Mantenimiento")
+                ? Icons.build
+                : (actividad.titulo.contains("Riego")
+                      ? Icons.water_drop
+                      : Icons.eco),
+            title: actividad.titulo,
+            time: actividad.subtitulo,
+            color: actividad.titulo.contains("Mantenimiento")
+                ? Colors.blue
+                : (actividad.titulo.contains("Riego")
+                      ? Colors.cyan
+                      : Colors.green),
+            onTap: () => _mostrarDetalles(
+              context,
+              actividad.titulo,
+              actividad.detalleAlerta,
+            ),
           ),
         ),
-
-        ActivityCard(
-          icon: Icons.water_drop,
-          title: "Riego automático activado",
-          time: "Hace 3 horas",
-          color: Colors.cyan,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Log de Riego",
-            "Ciclo programado completado con éxito en los Invernaderos 1 al 6.",
-          ),
-        ),
-
-        ActivityCard(
-          icon: Icons.eco,
-          title: "Producción actualizada",
-          time: "Hoy",
-          color: Colors.green,
-          onTap: () => _mostrarDetalles(
-            context,
-            "Log de Producción",
-            "Carga de datos completada: Ingresaron 450 kg de tomate clasificados como Calidad A.",
-          ),
-        ),
-
         const SizedBox(height: 30),
 
         const ReportButton(),
