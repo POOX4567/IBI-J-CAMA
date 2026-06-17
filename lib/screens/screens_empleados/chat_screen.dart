@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
   final String nombre;
@@ -18,37 +20,131 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final List<Mensaje> _mensajes = [
-    Mensaje(
-      texto:
+  final ScrollController _scrollController = ScrollController();
+
+  // Datos estáticos (simulando los que vendrían de Firestore)
+  final List<Map<String, dynamic>> _mensajesEstaticos = [
+    {
+      'texto':
           'Hola, jefe. Solo quería confirmar que ya terminamos la inspección de humedad en el Sector 4. Los niveles están un poco más altos de lo normal.',
-      esEnviado: false,
-      hora: '09:30 AM',
-    ),
-    Mensaje(
-      texto:
+      'enviadoPor': 'empleado',
+      'timestamp': Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(minutes: 30)),
+      ),
+      'leido': true,
+    },
+    {
+      'texto':
           'Entendido, Marcus. ¿Qué tanto subieron? ¿Es necesario ajustar el ciclo de riego automático para esta tarde?',
-      esEnviado: true,
-      hora: '09:35 AM',
-    ),
-    Mensaje(
-      texto:
+      'enviadoPor': 'supervisor',
+      'timestamp': Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(minutes: 25)),
+      ),
+      'leido': true,
+    },
+    {
+      'texto':
           'Subieron un 12%. Recomiendo pausar el riego de las 2:00 PM y volver a medir a las 4:00 PM. Adjunto foto de los sensores.',
-      esEnviado: false,
-      hora: '09:38 AM',
-    ),
+      'enviadoPor': 'empleado',
+      'timestamp': Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(minutes: 22)),
+      ),
+      'leido': true,
+    },
   ];
+
+  // Usuario actual simulado (cuando conectes Firebase, esto vendrá de autenticación)
+  final String _usuarioActualId = 'supervisor';
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void _sendMessage() {
+    if (_messageController.text.trim().isEmpty) return;
+
+    // Simular agregar mensaje localmente (como si fuera a Firestore)
+    setState(() {
+      _mensajesEstaticos.add({
+        'texto': _messageController.text.trim(),
+        'enviadoPor': _usuarioActualId,
+        'timestamp': Timestamp.now(),
+        'leido': false,
+      });
+      _messageController.clear();
+    });
+
+    _scrollToBottom();
+  }
+
+  String _formatHora(Timestamp timestamp) {
+    final DateTime dateTime = timestamp.toDate();
+    final DateFormat formatter = DateFormat('h:mm a', 'es');
+    return formatter.format(dateTime);
+  }
+
+  String _formatFechaHeader(Timestamp timestamp) {
+    final DateTime dateTime = timestamp.toDate();
+    final DateTime now = DateTime.now();
+    final DateTime yesterday = DateTime(now.year, now.month, now.day - 1);
+
+    if (dateTime.year == now.year &&
+        dateTime.month == now.month &&
+        dateTime.day == now.day) {
+      return 'Hoy';
+    } else if (dateTime.year == yesterday.year &&
+        dateTime.month == yesterday.month &&
+        dateTime.day == yesterday.day) {
+      return 'Ayer';
+    } else {
+      final DateFormat formatter = DateFormat(
+        'dd \'de\' MMMM \'de\' yyyy',
+        'es',
+      );
+      return formatter.format(dateTime);
+    }
+  }
+
+  // Agrupar mensajes por fecha
+  Map<String, List<Map<String, dynamic>>> _agruparMensajesPorFecha() {
+    final Map<String, List<Map<String, dynamic>>> agrupados = {};
+
+    for (var mensaje in _mensajesEstaticos) {
+      final timestamp = mensaje['timestamp'] as Timestamp;
+      final fecha = DateFormat('yyyy-MM-dd').format(timestamp.toDate());
+      if (!agrupados.containsKey(fecha)) {
+        agrupados[fecha] = [];
+      }
+      agrupados[fecha]!.add(mensaje);
+    }
+
+    return agrupados;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final mensajesAgrupados = _agruparMensajesPorFecha();
+    final fechasOrdenadas = mensajesAgrupados.keys.toList()..sort();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: Row(
           children: [
@@ -102,39 +198,51 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // Indicador de "Hoy"
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Hoy',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF5D4037),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
           // Lista de mensajes
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _mensajes.length,
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: fechasOrdenadas.length,
               itemBuilder: (context, index) {
-                final mensaje = _mensajes[index];
-                return _buildMessageBubble(mensaje);
+                final fecha = fechasOrdenadas[index];
+                final mensajesDeFecha = mensajesAgrupados[fecha]!;
+
+                // Obtener timestamp para la fecha (primer mensaje del día)
+                final primerTimestamp =
+                    mensajesDeFecha.first['timestamp'] as Timestamp;
+
+                return Column(
+                  children: [
+                    // Indicador de fecha
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _formatFechaHeader(primerTimestamp),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF5D4037),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ...mensajesDeFecha.map(
+                      (mensaje) => _buildMessageBubble(mensaje),
+                    ),
+                  ],
+                );
               },
             ),
           ),
@@ -169,9 +277,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 12),
                       ),
-                      onSubmitted: (value) {
-                        _sendMessage();
-                      },
+                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                 ),
@@ -194,30 +300,32 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(Mensaje mensaje) {
-    final isEnviado = mensaje.esEnviado;
+  Widget _buildMessageBubble(Map<String, dynamic> mensaje) {
+    final esEnviado = mensaje['enviadoPor'] == _usuarioActualId;
+    final texto = mensaje['texto'];
+    final timestamp = mensaje['timestamp'] as Timestamp;
 
     return Align(
-      alignment: isEnviado ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: esEnviado ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         child: Column(
-          crossAxisAlignment: isEnviado
+          crossAxisAlignment: esEnviado
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isEnviado ? const Color(0xFF2E7D32) : Colors.white,
+                color: esEnviado ? const Color(0xFF2E7D32) : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isEnviado ? 20 : 4),
-                  bottomRight: Radius.circular(isEnviado ? 4 : 20),
+                  bottomLeft: Radius.circular(esEnviado ? 20 : 4),
+                  bottomRight: Radius.circular(esEnviado ? 4 : 20),
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -228,16 +336,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
               child: Text(
-                mensaje.texto,
+                texto,
                 style: TextStyle(
                   fontSize: 14,
-                  color: isEnviado ? Colors.white : const Color(0xFF2E7D32),
+                  color: esEnviado ? Colors.white : const Color(0xFF2E7D32),
                 ),
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              mensaje.hora,
+              _formatHora(timestamp),
               style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
             ),
           ],
@@ -245,32 +353,4 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
-
-    setState(() {
-      _mensajes.add(
-        Mensaje(
-          texto: _messageController.text,
-          esEnviado: true,
-          hora: _getCurrentTime(),
-        ),
-      );
-      _messageController.clear();
-    });
-  }
-
-  String _getCurrentTime() {
-    final now = DateTime.now();
-    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
-  }
-}
-
-class Mensaje {
-  final String texto;
-  final bool esEnviado;
-  final String hora;
-
-  Mensaje({required this.texto, required this.esEnviado, required this.hora});
 }
