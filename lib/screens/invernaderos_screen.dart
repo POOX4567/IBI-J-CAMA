@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class InvernaderosScreen extends StatelessWidget {
   const InvernaderosScreen({super.key});
@@ -68,6 +71,83 @@ class InvernaderosScreen extends StatelessWidget {
                 ),
               ],
             ),
+
+            Container(
+  height: 250,
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Humedad promedio semanal',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+
+      const SizedBox(height: 20),
+
+      Expanded(
+        child: LineChart(
+          LineChartData(
+            gridData: const FlGridData(show: true),
+
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(showTitles: true),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    const dias = [
+                      'L',
+                      'M',
+                      'M',
+                      'J',
+                      'V',
+                      'S',
+                      'D'
+                    ];
+
+                    if (value.toInt() >= 0 &&
+                        value.toInt() < dias.length) {
+                      return Text(dias[value.toInt()]);
+                    }
+
+                    return const Text('');
+                  },
+                ),
+              ),
+            ),
+
+            borderData: FlBorderData(show: true),
+
+            lineBarsData: [
+              LineChartBarData(
+                isCurved: true,
+                spots: const [
+                  FlSpot(0, 45),
+                  FlSpot(1, 50),
+                  FlSpot(2, 47),
+                  FlSpot(3, 60),
+                  FlSpot(4, 55),
+                  FlSpot(5, 62),
+                  FlSpot(6, 58),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  ),
+),
 
             const SizedBox(height: 22),
 
