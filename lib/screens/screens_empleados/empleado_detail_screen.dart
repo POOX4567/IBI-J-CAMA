@@ -1,5 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:pdf/pdf.dart';
 import 'empleado.dart';
+import 'pdf_reports.dart';
 
 class EmpleadoDetailScreen extends StatefulWidget {
   final Empleado empleado;
@@ -327,7 +332,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: SizedBox(
@@ -339,7 +343,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 8),
               Text(
                 '${porcentaje.toStringAsFixed(0)}% de asistencia',
@@ -672,7 +675,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                 ),
                 if (actividad.estado == 'progreso') ...[
                   const SizedBox(height: 12),
-
                   ClipRRect(
                     borderRadius: BorderRadius.circular(3),
                     child: SizedBox(
@@ -684,9 +686,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 4),
-
                   Text(
                     '${(actividad.progreso * 100).toStringAsFixed(0)}% completado',
                     style: const TextStyle(
@@ -1052,34 +1052,280 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  void _generarReporte(String tipo) {
+  void _generarReporte(String tipo) async {
+    // Mostrar diálogo de carga
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(tipo),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.file_download, size: 48, color: Color(0xFF2E7D32)),
-              SizedBox(height: 16),
-              Text('Reporte generado exitosamente'),
-              SizedBox(height: 8),
-              Text(
-                'Se ha guardado en Descargas',
-                style: TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
+        return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
         );
       },
     );
+
+    try {
+      // Calcular estadísticas de asistencia
+      int presentes = _asistencias.where((a) => a.estado == 'presente').length;
+      int retardos = _asistencias.where((a) => a.estado == 'retardo').length;
+      int faltas = _asistencias.where((a) => a.estado == 'falta').length;
+      double porcentaje = (presentes / _asistencias.length) * 100;
+
+      // Preparar estadísticas según el tipo de reporte
+      List<String> estadisticas;
+      Map<String, dynamic> datosAsistencia;
+      String periodoTexto;
+
+      if (tipo.contains('Semanal')) {
+        periodoTexto = 'Semana 21 (20-24 Mayo 2026)';
+        estadisticas = [
+          'Asistencias: 4/6 días',
+          'Retardos: 1',
+          'Faltas: 1',
+          'Actividades completadas: 3/5',
+          'Cumplimiento: 75%',
+          'Puntualidad: 85%',
+        ];
+        datosAsistencia = {
+          'presentes': presentes,
+          'retardos': retardos,
+          'faltas': faltas,
+          'porcentaje': porcentaje.toStringAsFixed(0),
+        };
+      } else if (tipo.contains('Mensual')) {
+        periodoTexto = 'Mayo 2026';
+        estadisticas = [
+          'Asistencias: 18/22 días',
+          'Retardos: 3',
+          'Faltas: 2',
+          'Actividades completadas: 12/15',
+          'Cumplimiento: 82%',
+          'Puntualidad: 88%',
+        ];
+        datosAsistencia = {
+          'presentes': 18,
+          'retardos': 3,
+          'faltas': 2,
+          'porcentaje': 82,
+        };
+      } else {
+        periodoTexto = 'Evaluación General';
+        estadisticas = [
+          'Puntualidad: 85%',
+          'Calidad de trabajo: 92%',
+          'Trabajo en equipo: 88%',
+          'Iniciativa: 90%',
+          'Overall: 88.75% - Nivel Excelente',
+        ];
+        datosAsistencia = {
+          'presentes': presentes,
+          'retardos': retardos,
+          'faltas': faltas,
+          'porcentaje': porcentaje.toStringAsFixed(0),
+        };
+      }
+
+      // Preparar actividades para el PDF
+      List<Map<String, dynamic>> actividadesPDF = _actividades.map((a) {
+        String estadoTexto;
+        switch (a.estado) {
+          case 'completada':
+            estadoTexto = 'Completada';
+            break;
+          case 'progreso':
+            estadoTexto = 'En progreso';
+            break;
+          default:
+            estadoTexto = 'Pendiente';
+        }
+        return {'titulo': a.titulo, 'fecha': a.fecha, 'estado': estadoTexto};
+      }).toList();
+
+      // Generar el PDF
+      final pdfBytes = await PdfReports.generarReporteEmpleado(
+        nombre: widget.empleado.nombre,
+        rol: widget.empleado.rol,
+        zona: widget.empleado.zona,
+        periodo: periodoTexto,
+        estadisticas: estadisticas,
+        datosAsistencia: datosAsistencia,
+        actividades: actividadesPDF,
+      );
+
+      // Cerrar diálogo de carga
+      Navigator.pop(context);
+
+      // Mostrar opciones para compartir o imprimir
+      _showReporteOptions(pdfBytes, tipo);
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al generar reporte: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showReporteOptions(Uint8List pdfBytes, String tipo) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Opciones del Reporte',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildOptionButton(
+                      icon: Icons.share,
+                      label: 'Compartir',
+                      color: const Color(0xFF2E7D32),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _compartirReporte(pdfBytes, tipo);
+                      },
+                    ),
+                    _buildOptionButton(
+                      icon: Icons.print,
+                      label: 'Imprimir',
+                      color: const Color(0xFF81C784),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _imprimirReporte(pdfBytes);
+                      },
+                    ),
+                    _buildOptionButton(
+                      icon: Icons.save,
+                      label: 'Guardar',
+                      color: const Color(0xFF5D4037),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _guardarReporte(pdfBytes, tipo);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOptionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 30,
+          backgroundColor: color.withOpacity(0.1),
+          child: IconButton(
+            icon: Icon(icon, color: color, size: 28),
+            onPressed: onPressed,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _compartirReporte(Uint8List pdfBytes, String tipo) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName =
+        'reporte_${widget.empleado.nombre.replaceAll(' ', '_')}_$timestamp.pdf';
+
+    try {
+      await Share.shareXFiles([
+        XFile.fromData(pdfBytes, name: fileName),
+      ], text: 'Reporte de ${widget.empleado.nombre} - $tipo');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reporte listo para compartir'),
+          backgroundColor: Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al compartir: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _imprimirReporte(Uint8List pdfBytes) async {
+    try {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+        name: 'Reporte_Empleado',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al imprimir: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _guardarReporte(Uint8List pdfBytes, String tipo) async {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName =
+          'reporte_${widget.empleado.nombre.replaceAll(' ', '_')}_$timestamp.pdf';
+
+      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reporte guardado como $fileName'),
+          backgroundColor: Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _showActividadDetalle(Actividad actividad) {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'screens_empleados/chat_screen.dart';
 import 'screens_empleados/empleado_detail_screen.dart';
 import 'screens_empleados/empleado.dart';
@@ -15,6 +17,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
   final List<Empleado> _empleados = [
     Empleado(
+      id: 'emp_001',
       nombre: 'Marcus Rivera',
       rol: 'Responsable de Invernadero',
       zona: 'Invernadero 1',
@@ -24,8 +27,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       colorEstado: Colors.green,
       fotoUrl:
           'https://i.pinimg.com/originals/72/31/79/723179cb2148f0293eb2aaa8e08a3daa.jpg',
+      telefono: '+521234567890', // 👈 Número de teléfono
     ),
     Empleado(
+      id: 'emp_002',
       nombre: 'Elena Vance',
       rol: 'Responsable de Invernadero',
       zona: 'Invernadero 2',
@@ -35,8 +40,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       colorEstado: Colors.orange,
       fotoUrl:
           'https://tse1.mm.bing.net/th/id/OIP.dK-loEFvTG6Cdm9CjU42wAHaLG?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+      telefono: '+521234567891',
     ),
     Empleado(
+      id: 'emp_003',
       nombre: 'Carlos Mendoza',
       rol: 'Responsable de Invernadero',
       zona: 'Invernadero 1',
@@ -46,8 +53,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       colorEstado: Colors.green,
       fotoUrl:
           'https://i.pinimg.com/736x/1d/20/e0/1d20e072722e22dd56f17a51d7809561.jpg',
+      telefono: '+521234567892',
     ),
     Empleado(
+      id: 'emp_004',
       nombre: 'Laura Fernández',
       rol: 'Responsable de Invernadero',
       zona: 'Invernadero 2',
@@ -57,8 +66,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       colorEstado: Colors.green,
       fotoUrl:
           'https://i.pinimg.com/originals/e3/9c/da/e39cda0fdd790c019cdb02723178c524.jpg',
+      telefono: '+521234567893',
     ),
     Empleado(
+      id: 'emp_005',
       nombre: 'Roberto Sánchez',
       rol: 'Responsable de Invernadero',
       zona: 'Invernadero 1',
@@ -68,8 +79,16 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       colorEstado: Colors.orange,
       fotoUrl:
           'https://booker-kult.s3.amazonaws.com/library/1137/20210510_165004145_M.JPG',
+      telefono: '+521234567894',
     ),
   ];
+
+  // Fecha actual formateada con intl
+  String get _fechaActual {
+    final now = DateTime.now();
+    final formatter = DateFormat('EEEE, d \'de\' MMMM \'de\' yyyy', 'es');
+    return formatter.format(now);
+  }
 
   List<Empleado> get _empleadosFiltrados {
     if (_selectedFilter == 'Todo el Personal') {
@@ -82,12 +101,27 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     return _empleados;
   }
 
+  // Función para hacer llamada
+  Future<void> _hacerLlamada(String numero) async {
+    final Uri telUri = Uri(scheme: 'tel', path: numero);
+    if (await canLaunchUrl(telUri)) {
+      await launchUrl(telUri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se puede llamar a $numero'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // Header con estadísticas
+          // Header con estadísticas y fecha
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -107,6 +141,11 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _fechaActual, // 👈 Fecha formateada con intl
+                  style: const TextStyle(fontSize: 12, color: Colors.white70),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -214,13 +253,34 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 // Foto de perfil + Nombre y estado
                 Row(
                   children: [
-                    // Foto de perfil
+                    // Foto de perfil con mejor manejo
                     ClipOval(
                       child: Image.network(
                         empleado.fotoUrl,
                         width: 60,
                         height: 60,
                         fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            width: 60,
+                            height: 60,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF81C784),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
                             width: 60,
@@ -368,80 +428,62 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
                 const SizedBox(height: 16),
 
-                // Botón Mensaje
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatScreen(
-                            nombre: empleado.nombre,
-                            rol: empleado.rol,
-                            fotoUrl: empleado.fotoUrl,
+                // Botones: Mensaje y Llamada (uno al lado del otro)
+                Row(
+                  children: [
+                    // Botón Mensaje (ocupa la mitad)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreen(
+                                nombre: empleado.nombre,
+                                rol: empleado.rol,
+                                fotoUrl: empleado.fotoUrl,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.message, size: 18),
+                        label: const Text('Mensaje'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E7D32),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.message, size: 18),
-                    label: const Text('Mensaje'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    // Botón Llamada (ocupa la otra mitad)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _hacerLlamada(empleado.telefono);
+                        },
+                        icon: const Icon(Icons.phone, size: 18),
+                        label: const Text('Llamar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E7D32),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  void _showMensajeDialog(BuildContext context, String nombre) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Enviar mensaje a $nombre'),
-          content: const TextField(
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: 'Escribe tu mensaje aquí...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Mensaje enviado'),
-                    backgroundColor: Color(0xFF2E7D32),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-              ),
-              child: const Text('Enviar'),
-            ),
-          ],
-        );
-      },
     );
   }
 }
