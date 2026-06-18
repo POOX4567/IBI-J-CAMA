@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart'; // 📊 Plugin inyectado para las gráficas
+import 'package:fl_chart/fl_chart.dart';
 import 'package:ibi/models/incident_model.dart';
 import 'package:ibi/services/incident_service.dart';
+import 'package:data_table_2/data_table_2.dart';
+// Importamos tu botón reutilizable universal
+import '../../widgets/widgets_dashboard/universal_export_buttons.dart';
 
 class IncidentsReportPage extends StatefulWidget {
   const IncidentsReportPage({super.key});
@@ -22,91 +25,36 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
   @override
   void initState() {
     super.initState();
-    // Inicializamos la carga al crear el estado de la página
     _incidentsFuture = _incidentService.fetchIncidents();
-  }
-
-  void _mostrarAvisoIncidencia(IncidentModel incident) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "⚠️ ALERTA: ${incident.title}\n📍 Ubicación: ${incident.area} • Estatus: [${incident.status}]",
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-        backgroundColor: textDark,
-        duration: const Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryRed, lightRed],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "Reporte de Incidencias",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              "Gestión de alertas y problemas",
-              style: TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          color: Colors.white,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: _buildAppBar(),
       body: FutureBuilder<List<IncidentModel>>(
         future: _incidentsFuture,
         builder: (context, snapshot) {
-          // ⏳ Cargando datos...
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(color: primaryRed),
             );
           }
-          // ❌ Control de excepciones
-          if (snapshot.hasError) {
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data!.isEmpty) {
             return Center(
-              child: Text("Error al cargar incidencias: ${snapshot.error}"),
-            );
-          }
-          // 🚫 No hay datos disponibles
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text("No existen incidencias reportadas."),
+              child: Text(
+                snapshot.hasError
+                    ? "Error: ${snapshot.error}"
+                    : "No existen incidencias reportadas.",
+              ),
             );
           }
 
           final List<IncidentModel> incidents = snapshot.data!;
 
-          // --- CÁLCULOS DINÁMICOS SOBRE MODELOS ---
           int abiertas = incidents.where((i) => i.status == "Abierto").length;
           int enProceso = incidents
               .where((i) => i.status == "En proceso")
@@ -114,22 +62,18 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
           int resueltas = incidents.where((i) => i.status == "Resuelto").length;
           int criticas = incidents.where((i) => i.severity == "Alta").length;
 
+          // 🔥 MATRIZ DE DATOS CRUDA: Se genera una sola vez de forma eficiente
+          final List<List<String>> rawReportData = incidents
+              .map((i) => [i.title, i.severity, i.status, i.area])
+              .toList();
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Resumen de incidencias",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textDark,
-                  ),
-                ),
+                _buildSectionTitle("Resumen de incidencias"),
                 const SizedBox(height: 12),
-
-                // KPIs
                 Row(
                   children: [
                     _localKpiCard(
@@ -165,150 +109,30 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
-                const Text(
-                  "Distribución por Estatus",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textDark,
-                  ),
-                ),
+                _buildSectionTitle("Distribución por Estatus"),
                 const SizedBox(height: 12),
-
-                // 📊 Renderizado de la gráfica real usando el plugin fl_chart
                 _localRealChart(
                   abiertas: abiertas,
                   enProceso: enProceso,
                   resueltas: resueltas,
                 ),
-
                 const SizedBox(height: 24),
-                const Text(
-                  "Registro de incidencias",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textDark,
-                  ),
-                ),
+                _buildSectionTitle("Registro de incidencias"),
+                const SizedBox(height: 12),
+                _buildDataTableCard(incidents),
+                const SizedBox(height: 24),
+                _buildSectionTitle("Acciones"),
                 const SizedBox(height: 12),
 
-                // Data Table de registros
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 35,
-                      showCheckboxColumn: false,
-                      headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade200,
-                      ),
-                      columns: const [
-                        DataColumn(
-                          label: Text(
-                            "Incidencia",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            "Severidad",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            "Estado",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            "Área",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                      rows: incidents.map((incident) {
-                        return DataRow(
-                          onSelectChanged: (_) =>
-                              _mostrarAvisoIncidencia(incident),
-                          cells: [
-                            DataCell(
-                              Text(
-                                incident.title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: incident.severityColor.withOpacity(
-                                    0.12,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  incident.severity,
-                                  style: TextStyle(
-                                    color: incident.severityColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: incident.statusColor.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  incident.status,
-                                  style: TextStyle(
-                                    color: incident.statusColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            DataCell(Text(incident.area)),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
+                // 🔥 TU BOTÓN UNIVERSAL: Conectado al CSV nativo y limpio de lógica pesada
+                UniversalExportButtons(
+                  title: "Bitacora Oficial de Incidencias",
+                  subtitle: "Reporte histórico del Invernadero Inteligente",
+                  csvSheetName: "Incidencias_Invernadero",
+                  headers: const ["Incidencia", "Severidad", "Estado", "Área"],
+                  rows: rawReportData,
                 ),
-
-                const SizedBox(height: 24),
-                const Text(
-                  "Acciones",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textDark,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _localExportButtons(context, "incidencias"),
               ],
             ),
           );
@@ -316,6 +140,55 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
       ),
     );
   }
+
+  // --- UI COMPONENTS LOCALES ---
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [primaryRed, lightRed],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
+      title: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Reporte de Incidencias",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 2),
+          Text(
+            "Gestión de alertas y problemas",
+            style: TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) => Text(
+    title,
+    style: const TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: textDark,
+    ),
+  );
 
   Widget _localKpiCard({
     required String title,
@@ -363,7 +236,6 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
     );
   }
 
-  // Widget gráfico con fl_chart implementado usando datos dinámicos reales
   Widget _localRealChart({
     required int abiertas,
     required int enProceso,
@@ -467,47 +339,96 @@ class _IncidentsReportPageState extends State<IncidentsReportPage> {
     );
   }
 
-  Widget _localExportButtons(BuildContext context, String modulo) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Exportando reporte de $modulo a PDF...")),
-            ),
-            icon: const Icon(Icons.picture_as_pdf, size: 18),
-            label: const Text("Exportar PDF"),
-          ),
+  Widget _buildDataTableCard(List<IncidentModel> incidents) {
+    return SizedBox(
+      height: 280,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: DataTable2(
+          columnSpacing: 10,
+          minWidth: 550,
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
+          columns: const [
+            DataColumn2(label: Text("Incidencia"), size: ColumnSize.L),
+            DataColumn2(label: Text("Severidad"), size: ColumnSize.S),
+            DataColumn2(label: Text("Estado"), size: ColumnSize.M),
+            DataColumn2(label: Text("Área"), size: ColumnSize.M),
+          ],
+          rows: incidents
+              .map(
+                (incident) => DataRow(
+                  onSelectChanged: (_) => _mostrarAvisoIncidencia(incident),
+                  cells: [
+                    DataCell(
+                      Text(
+                        incident.title,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: incident.severityColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          incident.severity,
+                          style: TextStyle(
+                            color: incident.severityColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: incident.statusColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          incident.status,
+                          style: TextStyle(
+                            color: incident.statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(incident.area)),
+                  ],
+                ),
+              )
+              .toList(),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryRed,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("Exportando reporte de $modulo a Excel..."),
-              ),
-            ),
-            icon: const Icon(Icons.table_chart, size: 18),
-            label: const Text("Exportar Excel"),
-          ),
+      ),
+    );
+  }
+
+  void _mostrarAvisoIncidencia(IncidentModel incident) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "⚠️ ALERTA: ${incident.title}\n📍 Ubicación: ${incident.area} • Estatus: [${incident.status}]",
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
         ),
-      ],
+        backgroundColor: textDark,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fl_chart/fl_chart.dart';
-import 'package:ibi/models/activity_model.dart'; // Importa el modelo
-import 'package:ibi/services/activity_service.dart'; // Importa el servicio
+import 'package:ibi/models/activity_model.dart';
+import 'package:ibi/services/activity_service.dart';
+// Importamos tu nuevo componente reutilizable
+import '../../widgets/widgets_dashboard/universal_export_buttons.dart';
 
 class ActivitiesReportPage extends StatefulWidget {
   const ActivitiesReportPage({super.key});
@@ -12,11 +13,9 @@ class ActivitiesReportPage extends StatefulWidget {
 }
 
 class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
-  // Instanciamos el servicio
   final ActivityService _activityService = ActivityService();
   late Future<List<ActivityModel>> _activitiesFuture;
 
-  // Colores corporativos
   static const Color primaryTeal = Color(0xFF004D40);
   static const Color lightTeal = Color(0xFF26A69A);
   static const Color brown = Color(0xFF5D4037);
@@ -25,146 +24,36 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
   @override
   void initState() {
     super.initState();
-    // Lanzamos la petición al iniciar la pantalla
     _activitiesFuture = _activityService.fetchActivities();
-  }
-
-  void _showActivityDetails(ActivityModel item) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          item.actividad,
-          style: const TextStyle(fontWeight: FontWeight.bold, color: brown),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.location_on, color: primaryTeal, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  "Ubicación: ${item.zona}",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.person, color: primaryTeal, size: 18),
-                const SizedBox(width: 6),
-                Text("Responsable: ${item.encargado}"),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.info, color: primaryTeal, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  "Estado: ${item.progreso}",
-                  style: TextStyle(
-                    color: item.statusColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            const Text(
-              "Bitácora Técnica:",
-              style: TextStyle(fontWeight: FontWeight.bold, color: brown),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              item.detalle,
-              style: TextStyle(color: Colors.grey.shade800, height: 1.35),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Entendido",
-              style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryTeal, lightTeal],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "Reporte de Actividades",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              "Seguimiento general de tareas",
-              style: TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          color: Colors.white,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: _buildAppBar(),
       body: FutureBuilder<List<ActivityModel>>(
         future: _activitiesFuture,
         builder: (context, snapshot) {
-          // ⏳ Caso 1: Los datos se están cargando
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(color: primaryTeal),
             );
           }
-          // ❌ Caso 2: Hubo un error al traer los datos
-          if (snapshot.hasError) {
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data!.isEmpty) {
             return Center(
-              child: Text("Error al cargar las actividades: ${snapshot.error}"),
-            );
-          }
-          // 🚫 Caso 3: No llegaron datos o la lista está vacía
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text("No hay actividades registradas por el momento."),
+              child: Text(
+                snapshot.hasError
+                    ? "Error: ${snapshot.error}"
+                    : "No hay datos disponibles.",
+              ),
             );
           }
 
-          // 🧠 Caso 4: ¡Datos listos!
           final List<ActivityModel> activities = snapshot.data!;
 
-          // Cálculos dinámicos usando los objetos del modelo
           double completadas = activities
               .where((act) => act.progreso == "Completado")
               .length
@@ -178,19 +67,17 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
               .length
               .toDouble();
 
+          // 🔥 Mapeamos los datos crudos una sola vez aquí para el componente reutilizable
+          final List<List<String>> exportData = activities
+              .map((act) => [act.zona, act.actividad, act.progreso])
+              .toList();
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Resumen de actividades",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
+                _buildSectionTitle("Resumen de actividades"),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -217,14 +104,7 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  "Distribución Operativa",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
+                _buildSectionTitle("Distribución Operativa"),
                 const SizedBox(height: 12),
                 _localRealChart(
                   completadas: completadas,
@@ -232,120 +112,22 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
                   pendientes: pendientes,
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  "Detalle de actividades",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
+                _buildSectionTitle("Detalle de actividades"),
+                const SizedBox(height: 12),
+                _buildDataTableCard(activities),
+                const SizedBox(height: 24),
+                _buildSectionTitle("Acciones"),
                 const SizedBox(height: 12),
 
-                // TABLA CON LOS DATOS DEL MODELO
-                Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 40,
-                      showCheckboxColumn: false,
-                      headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade100,
-                      ),
-                      columns: const [
-                        DataColumn(
-                          label: Text(
-                            "Ubicación",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: brown,
-                            ),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            "Tarea / Actividad",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: brown,
-                            ),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            "Estado Actual",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: brown,
-                            ),
-                          ),
-                        ),
-                      ],
-                      rows: activities.map((item) {
-                        return DataRow(
-                          onSelectChanged: (_) => _showActivityDetails(item),
-                          cells: [
-                            DataCell(
-                              Text(
-                                item.zona,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: brown,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              Text(
-                                item.actividad,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: item.statusColor.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: item.statusColor.withOpacity(0.3),
-                                  ),
-                                ),
-                                child: Text(
-                                  item.progreso,
-                                  style: TextStyle(
-                                    color: item.statusColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
+                // 🔥 LLAMADA IMPECABLE AL BOTÓN UNIVERSAL:
+                UniversalExportButtons(
+                  title: "Reporte de Actividades Operativas",
+                  subtitle:
+                      "Listado de tareas, ubicaciones y estados de ejecución",
+                  csvSheetName: "Actividades_Bitacora",
+                  headers: const ['Ubicación', 'Actividad / Tarea', 'Estado'],
+                  rows: exportData,
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  "Acciones",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _localExportButtons(context),
               ],
             ),
           );
@@ -354,7 +136,55 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
     );
   }
 
-  // --- MÉTODOS AUXILIARES ---
+  // --- COMPONENTES LOCALES FIJOS ---
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [primaryTeal, lightTeal],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
+      title: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Reporte de Actividades",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 2),
+          Text(
+            "Seguimiento general de tareas",
+            style: TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new),
+        color: Colors.white,
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String text) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: brown,
+    ),
+  );
 
   Widget _localKpiCard({
     required String title,
@@ -499,57 +329,153 @@ class _ActivitiesReportPageState extends State<ActivitiesReportPage> {
     );
   }
 
-  Widget _localExportButtons(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+  Widget _buildDataTableCard(List<ActivityModel> activities) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 40,
+          showCheckboxColumn: false,
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+          columns: const [
+            DataColumn(
+              label: Text(
+                "Ubicación",
+                style: TextStyle(fontWeight: FontWeight.bold, color: brown),
               ),
             ),
-            onPressed: () {
-              if (kIsWeb) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Generando PDF en navegador..."),
+            DataColumn(
+              label: Text(
+                "Tarea / Actividad",
+                style: TextStyle(fontWeight: FontWeight.bold, color: brown),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                "Estado Actual",
+                style: TextStyle(fontWeight: FontWeight.bold, color: brown),
+              ),
+            ),
+          ],
+          rows: activities.map((item) {
+            return DataRow(
+              onSelectChanged: (_) => _showActivityDetails(item),
+              cells: [
+                DataCell(
+                  Text(
+                    item.zona,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: brown,
+                    ),
                   ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Exportando a PDF en móvil...")),
-                );
-              }
-            },
-            icon: const Icon(Icons.picture_as_pdf, size: 18),
-            label: const Text("Exportar PDF"),
-          ),
+                ),
+                DataCell(
+                  Text(
+                    item.actividad,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: item.statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: item.statusColor.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Text(
+                      item.progreso,
+                      style: TextStyle(
+                        color: item.statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryTeal,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+      ),
+    );
+  }
+
+  void _showActivityDetails(ActivityModel item) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          item.actividad,
+          style: const TextStyle(fontWeight: FontWeight.bold, color: brown),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.location_on, color: primaryTeal, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  "Ubicación: ${item.zona}",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Exportando a Excel...")),
-              );
-            },
-            icon: const Icon(Icons.table_chart, size: 18),
-            label: const Text("Exportar Excel"),
-          ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.person, color: primaryTeal, size: 18),
+                const SizedBox(width: 6),
+                Text("Responsable: ${item.encargado}"),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.info, color: primaryTeal, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  "Estado: ${item.progreso}",
+                  style: TextStyle(
+                    color: item.statusColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            const Text(
+              "Bitácora Técnica:",
+              style: TextStyle(fontWeight: FontWeight.bold, color: brown),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.detalle,
+              style: TextStyle(color: Colors.grey.shade800, height: 1.35),
+            ),
+          ],
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Entendido",
+              style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

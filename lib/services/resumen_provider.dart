@@ -1,109 +1,159 @@
-// providers/resumen_provider.dart
 import 'package:flutter/material.dart';
-import '../models/resumen_dashboard_model.dart';
+import 'package:ibi/models/incident_model.dart';
+import '../services/incident_service.dart'; // Ajusta la ruta a tu IncidentService
 
-class ResumenProvider extends ChangeNotifier {
-  // 1. Datos de las Tarjetas Superiores
-  final Map<String, MetricaCard> _tarjetasPrincipales = {
-    'invernaderos': MetricaCard(
-      titulo: "Invernaderos",
-      valor: "10/12",
-      subtitulo: "Activos",
-      detalleAlerta:
-          "Detalle: 10 invernaderos están en producción óptima. Los invernaderos 4 y 9 están detenidos temporalmente.",
-    ),
-    'empleados': MetricaCard(
-      titulo: "Personal en Turno",
-      valor: "28/48",
-      subtitulo: "En turno",
-      detalleAlerta:
-          "Detalle: 28 empleados se encuentran en las instalaciones. Próximo cambio de turno en 2 horas.",
-    ),
-    'alertas': MetricaCard(
-      titulo: "Alertas Críticas",
-      valor: "5",
-      subtitulo: "Activas",
-      detalleAlerta:
-          "Detalle: Hay 5 problemas detectados en los sensores. Por favor revisa la sección de Alertas Importantes.",
-    ),
-    'mantenimiento': MetricaCard(
-      titulo: "Tareas Pendientes",
-      valor: "8",
-      subtitulo: "Pendientes",
-      detalleAlerta:
-          "Detalle: Hay 8 órdenes de mantenimiento asignadas para el día de hoy. 3 son de alta prioridad.",
-    ),
-  };
+/// Modelo de datos genérico para mapear información hacia las tarjetas de la UI
+class MetricData {
+  final String titulo;
+  final String valor;
+  final String subtitulo;
+  final String detalleAlerta;
 
-  // 2. Datos de Alertas Importantes
-  final List<EventoDashboard> _alertasImportantes = [
-    EventoDashboard(
-      titulo: "Temperatura Alta",
-      subtitulo: "Invernadero 2",
-      detalleAlerta:
-          "La temperatura superó el umbral permitido alcanzando los 38°C. Sistema de ventilación automática activado.",
-    ),
-    EventoDashboard(
-      titulo: "Falla de Riego",
-      subtitulo: "Zona Norte",
-      detalleAlerta:
-          "Pérdida de presión detectada en la tubería principal de riego sector 3.",
-    ),
-    EventoDashboard(
-      titulo: "Sensor Desconectado",
-      subtitulo: "Invernadero 5",
-      detalleAlerta:
-          "El sensor de humedad del suelo dejó de enviar datos. Posible falla de batería.",
-    ),
-  ];
+  MetricData({
+    required this.titulo,
+    this.valor = "",
+    required this.subtitulo,
+    required this.detalleAlerta,
+  });
+}
 
-  // 3. Resumen de Actividad (Historiales)
-  final List<EventoDashboard> _resumenActividad = [
-    EventoDashboard(
-      titulo: "Actividad Diaria",
-      subtitulo: "25 eventos registrados",
-      detalleAlerta:
-          "Se registraron 12 riegos automáticos, 5 logs de acceso y 8 mediciones climáticas manuales.",
-    ),
-    EventoDashboard(
-      titulo: "Actividad Semanal",
-      subtitulo: "148 eventos registrados",
-      detalleAlerta:
-          "Rendimiento de alertas resueltas esta semana: 92% de efectividad.",
-    ),
-    EventoDashboard(
-      titulo: "Actividad Mensual",
-      subtitulo: "620 eventos registrados",
-      detalleAlerta:
-          "Resumen de producción: 14 toneladas cosechadas y procesadas con éxito durante el mes.",
-    ),
-  ];
+class ResumenProvider with ChangeNotifier {
+  final IncidentService _incidentService = IncidentService();
 
-  // 4. Actividad Reciente
-  final List<EventoDashboard> _actividadReciente = [
-    EventoDashboard(
-      titulo: "Mantenimiento realizado",
-      subtitulo: "Hace 1 hora",
-      detalleAlerta:
-          "El técnico cambió el extractor de aire dañado en el Invernadero 1.",
-    ),
-    EventoDashboard(
-      titulo: "Riego automático activado",
-      subtitulo: "Hace 3 horas",
-      detalleAlerta:
-          "Ciclo programado completado con éxito en los Invernaderos 1 al 6.",
-    ),
-    EventoDashboard(
-      titulo: "Producción actualizada",
-      subtitulo: "Hoy",
-      detalleAlerta:
-          "Carga de datos completada: Ingresaron 450 kg de tomate clasificados como Calidad A.",
-    ),
-  ];
+  // Estados de control para la UI
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
 
-  // Getters para exponer la información de forma limpia a la UI
-  Map<String, MetricaCard> get tarjetasPrincipales => _tarjetasPrincipales;
-  List<EventoDashboard> get alertasImportantes => _alertasImportantes;
-  List<EventoDashboard> get resumenActividad => _resumenActividad;
-  List<EventoDashboard> get actividadReciente => _actividadReciente;
+  // Listas internas que alimentarán a la interfaz
+  Map<String, MetricData> tarjetasPrincipales = {};
+  List<MetricData> alertasImportantes = [];
+  List<MetricData> resumenActividad = [];
+  List<MetricData> actividadReciente = [];
+
+  ResumenProvider() {
+    _inicializarDatosPorDefecto();
+    cargarDatosDesdeServicio();
+  }
+
+  /// Inicializa con datos vacíos o "placeholders" para evitar errores de nulos al arrancar la app
+  void _inicializarDatosPorDefecto() {
+    tarjetasPrincipales = {
+      'invernaderos': MetricData(
+        titulo: "Invernaderos",
+        valor: "--",
+        subtitulo: "Cargando...",
+        detalleAlerta: "",
+      ),
+      'empleados': MetricData(
+        titulo: "Empleados",
+        valor: "--",
+        subtitulo: "Cargando...",
+        detalleAlerta: "",
+      ),
+      'alertas': MetricData(
+        titulo: "Alertas",
+        valor: "--",
+        subtitulo: "Cargando...",
+        detalleAlerta: "",
+      ),
+      'mantenimiento': MetricData(
+        titulo: "Mantenimiento",
+        valor: "--",
+        subtitulo: "Cargando...",
+        detalleAlerta: "",
+      ),
+    };
+    alertasImportantes = [];
+    resumenActividad = [];
+    actividadReciente = [];
+  }
+
+  /// Método principal que invoca al IncidentService y procesa los datos
+  Future<void> cargarDatosDesdeServicio() async {
+    _isLoading = true;
+    notifyListeners(); // Notifica a la UI que muestre el spinner de carga
+
+    try {
+      // 1. Llamada asíncrona al servicio (espera los 1.2 segundos simulados)
+      final List<IncidentModel> incidentes = await _incidentService
+          .fetchIncidents();
+
+      // 2. Procesamos métricas para las "Tarjetas Principales" basándonos en los estados del JSON
+      final int totalAlertasActivas = incidentes
+          .where((i) => i.status == "Abierto" || i.status == "En proceso")
+          .length;
+      final int totalMantenimientos = incidentes
+          .where((i) => i.status == "Resuelto" || i.severity == "Baja")
+          .length;
+
+      tarjetasPrincipales['invernaderos'] = MetricData(
+        titulo: "Invernaderos",
+        valor: "4/5",
+        subtitulo: "Activos",
+        detalleAlerta: "Sistemas estables a excepción de fallas reportadas.",
+      );
+      tarjetasPrincipales['empleados'] = MetricData(
+        titulo: "Empleados",
+        valor: "12",
+        subtitulo: "En turno",
+        detalleAlerta: "Personal completo asignado a las zonas.",
+      );
+
+      tarjetasPrincipales['alertas'] = MetricData(
+        titulo: "Alertas Activas",
+        valor: totalAlertasActivas.toString(),
+        subtitulo: "Requieren atención",
+        detalleAlerta:
+            "Existen $totalAlertasActivas incidentes pendientes en revisión.",
+      );
+
+      tarjetasPrincipales['mantenimiento'] = MetricData(
+        titulo: "Mantenimientos",
+        valor: totalMantenimientos.toString(),
+        subtitulo: "Tareas registradas",
+        detalleAlerta:
+            "Historial cuenta con $totalMantenimientos registros preventivos/resueltos.",
+      );
+
+      // 3. Mapeamos dinámicamente las "Alertas Importantes" (Filtrando incidentes de severidad Alta o Media)
+      alertasImportantes = incidentes
+          .where((i) => i.severity == "Alta" || i.severity == "Media")
+          .map(
+            (i) => MetricData(
+              titulo: i.title,
+              subtitulo: i.area,
+              detalleAlerta:
+                  "El incidente en ${i.area} se encuentra en estado '${i.status}' con severidad ${i.severity}.",
+            ),
+          )
+          .toList();
+
+      // 4. Mapeamos la "Actividad Reciente" (Muestra todo el historial cronológico del servicio)
+      actividadReciente = incidentes
+          .map(
+            (i) => MetricData(
+              titulo: i.title,
+              subtitulo: "Estado: ${i.status} - ${i.area}",
+              detalleAlerta:
+                  "Registro automático: El sistema reporta '${i.title}' en la ubicación ${i.area}.",
+            ),
+          )
+          .toList();
+
+      // 5. Mapeamos el "Resumen de Actividad"
+      resumenActividad = [
+        MetricData(
+          titulo: "Actividad Diaria",
+          subtitulo: "${incidentes.length} eventos en total",
+          detalleAlerta:
+              "Se procesaron exitosamente todos los reportes del día de hoy.",
+        ),
+      ];
+    } catch (e) {
+      debugPrint("Error al cargar incidentes en el Provider: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners(); // Notifica a la UI que ya hay datos disponibles
+    }
+  }
 }

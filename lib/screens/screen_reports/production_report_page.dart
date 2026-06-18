@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:data_table_2/data_table_2.dart';
 import 'package:ibi/models/production_model.dart';
 import 'package:ibi/services/production_service.dart';
+// Importamos tu botón reutilizable universal
+import '../../widgets/widgets_dashboard/universal_export_buttons.dart';
 
 class ProductionReportPage extends StatefulWidget {
   const ProductionReportPage({super.key});
@@ -14,10 +17,9 @@ class _ProductionReportPageState extends State<ProductionReportPage> {
   final ProductionService _productionService = ProductionService();
   late Future<List<ProductionModel>> _productionFuture;
 
-  // Paleta de colores identitaria del módulo
   static const Color primaryGreen = Color(0xFF2E7D32);
-  static const Color lightGreen = Color(0xFF66BB6A);
-  static const Color brown = Color(0xFF5D4037);
+  static const Color lightGreen = Color(0xFF4CAF50);
+  static const Color textDark = Color(0xFF263238);
   static const Color background = Color(0xFFF5F6FA);
 
   @override
@@ -26,80 +28,11 @@ class _ProductionReportPageState extends State<ProductionReportPage> {
     _productionFuture = _productionService.fetchProductionData();
   }
 
-  void _mostrarContactoEncargado(ProductionModel data) {
-    String mensajeDetalle =
-        "📍 ${data.ubicacion} • Estatus: ${data.estado}\n"
-        "👤 Encargado: ${data.encargado} (Tel: ${data.tel})\n";
-
-    if (data.estado == "Advertencia") {
-      mensajeDetalle +=
-          "⚠️ Acción: Solicitar ajuste manual de riego preventivo.";
-    } else if (data.estado == "Crítico") {
-      mensajeDetalle +=
-          "🚨 Acción: Desplegar técnico por alto estrés hídrico inmediato.";
-    } else {
-      mensajeDetalle += "✅ Acción: Mantener automatización activa sin cambios.";
-    }
-
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          mensajeDetalle,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-        backgroundColor: brown,
-        duration: const Duration(seconds: 5),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryGreen, lightGreen],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "Análisis Avanzado de Producción",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              "Rendimiento operativo, variables ambientales y personal",
-              style: TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          color: Colors.white,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: _buildAppBar(),
       body: FutureBuilder<List<ProductionModel>>(
         future: _productionFuture,
         builder: (context, snapshot) {
@@ -108,284 +41,135 @@ class _ProductionReportPageState extends State<ProductionReportPage> {
               child: CircularProgressIndicator(color: primaryGreen),
             );
           }
-          if (snapshot.hasError) {
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data!.isEmpty) {
             return Center(
-              child: Text("Error al cargar producción: ${snapshot.error}"),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text("No hay datos de producción actuales."),
+              child: Text(
+                snapshot.hasError
+                    ? "Error: ${snapshot.error}"
+                    : "No existen registros de producción reportados.",
+              ),
             );
           }
 
           final List<ProductionModel> productionList = snapshot.data!;
 
-          // Cómputos dinámicos en tiempo real
-          int alertasActivas = productionList
-              .where((e) => e.estado != "Estable")
+          // Métricas analíticas de producción agrícola
+          int estables = productionList
+              .where((p) => p.estado == "Estable")
               .length;
-          int camasEstables = productionList
-              .where((e) => e.estado == "Estable")
+          int advertencias = productionList
+              .where((p) => p.estado == "Advertencia")
               .length;
-          double eficienciaClimatica = (productionList.isNotEmpty)
-              ? (camasEstables / productionList.length) * 100
-              : 0.0;
+          int criticos = productionList
+              .where((p) => p.estado != "Estable" && p.estado != "Advertencia")
+              .length;
+
+          double totalKg = productionList.fold(
+            0,
+            (sum, item) => sum + item.produccionKg,
+          );
+
+          // 🔥 MATRIZ DE EXPORTACIÓN IMPECABLE (7 Columnas del Modelo)
+          final List<List<String>> rawReportData = productionList
+              .map(
+                (p) => [
+                  p.ubicacion,
+                  p.cultivo,
+                  "${p.produccionKg} Kg",
+                  "${p.temperatura}°C",
+                  "${p.humedad}%",
+                  p.estado,
+                  p.encargado,
+                ],
+              )
+              .toList();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. KPIs Automatizados
+                _buildSectionTitle("Resumen de rendimiento"),
+                const SizedBox(height: 12),
+
+                // Cuadrícula de KPIs de producción
                 Row(
                   children: [
                     _localKpiCard(
-                      title: "Eficiencia Climática",
-                      value: "${eficienciaClimatica.toStringAsFixed(0)}%",
-                      subtitle: "Estabilidad en camas",
-                      color: primaryGreen,
-                      icon: Icons.thermostat_rounded,
+                      title: "Zonas Estables",
+                      value: estables.toString(),
+                      color: const Color(0xFF2E7D32),
+                      icon: Icons.check_circle,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _localKpiCard(
-                      title: "Alertas de Impacto",
-                      value: "$alertasActivas Activas",
-                      subtitle: "Requieren intervención",
-                      color: const Color(0xFFD32F2F),
-                      icon: Icons.warning_amber_rounded,
+                      title: "En Advertencia",
+                      value: advertencias.toString(),
+                      color: const Color(0xFFF57C00),
+                      icon: Icons.gpp_maybe,
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-
-                // 2. Gráfica de Tendencia Climática
-                const Text(
-                  "Historial de Temperatura vs Humedad por Cama",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
                 const SizedBox(height: 10),
-                _localLineChart(productionList),
-                const SizedBox(height: 24),
-
-                // 3. Tabla de Rendimiento
-                const Text(
-                  "Rendimiento Analítico por Zona y Camas",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columnSpacing: 22,
-                        showCheckboxColumn: false,
-                        headingRowColor: WidgetStateProperty.all(
-                          Colors.grey.shade100,
-                        ),
-                        columns: const [
-                          DataColumn(
-                            label: Text(
-                              "Ubicación",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Cultivo",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Prod. Real",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Temp. Prom",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Hum. Prom",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Estado Actual",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: brown,
-                              ),
-                            ),
-                          ),
-                        ],
-                        rows: productionList.map((data) {
-                          return DataRow(
-                            onSelectChanged: (_) =>
-                                _mostrarContactoEncargado(data),
-                            cells: [
-                              DataCell(
-                                Text(
-                                  data.ubicacion,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: brown,
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text(data.cultivo)),
-                              DataCell(
-                                Text(
-                                  "${data.produccionKg.toStringAsFixed(0)} Kg",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryGreen,
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text("${data.temperatura}°C")),
-                              DataCell(Text("${data.humedad}%")),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: data.estadoColor.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: data.estadoColor.withOpacity(0.35),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    data.estado,
-                                    style: TextStyle(
-                                      color: data.estadoColor,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                Row(
+                  children: [
+                    _localKpiCard(
+                      title: "Zonas Críticas",
+                      value: criticos.toString(),
+                      color: const Color(0xFFD32F2F),
+                      icon: Icons.dangerous,
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    _localKpiCard(
+                      title: "Total Cosecha",
+                      value: "${totalKg.toInt()} Kg",
+                      color: Colors.blue,
+                      icon: Icons.scale,
+                    ),
+                  ],
                 ),
+
                 const SizedBox(height: 24),
+                _buildSectionTitle("Estado Biológico de las Camas"),
+                const SizedBox(height: 12),
 
-                // 4. Supervisión de Encargados
-                const Text(
-                  "Supervisión y Eficiencia de Encargados",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
+                // Gráfico sectorial real
+                _localRealChart(
+                  estables: estables,
+                  advertencias: advertencias,
+                  criticos: criticos,
                 ),
-                const SizedBox(height: 10),
-                _buildWorkerAuditCard(
-                  name: "Juan Pérez (Zona A)",
-                  phone: "999 123 4567",
-                  performanceText:
-                      "Responsable de 3 camas. Mayor estabilidad térmica registrada en el sector.",
-                  color: primaryGreen,
-                ),
-                _buildWorkerAuditCard(
-                  name: "Marcos Chan (Zona B)",
-                  phone: "999 555 7812",
-                  performanceText:
-                      "Responsable de 4 camas. Reporta humedad baja persistente en Cama 1 por fallo de aspersor.",
-                  color: const Color(0xFFF57C00),
-                ),
-                _buildWorkerAuditCard(
-                  name: "Elena Vance (Zona C)",
-                  phone: "999 777 9012",
-                  performanceText:
-                      "Responsable de 2 camas. Registra zona en estado crítico por estrés hídrico de mediodía.",
-                  color: const Color(0xFFD32F2F),
-                ),
+
                 const SizedBox(height: 24),
+                _buildSectionTitle("Monitoreo y Registro de Cosecha"),
+                const SizedBox(height: 12),
 
-                // 5. Logs de Eventos
-                const Text(
-                  "Logs de Eventos con Impacto en Producción",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: brown,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildLogTile(
-                        "Humedad baja detectada en cama 1 (Zona B)",
-                        "Hace 15 min",
-                        const Color(0xFFF57C00),
-                      ),
-                      const Divider(height: 1),
-                      _buildLogTile(
-                        "Sensor de humedad requiere revisión (Zona C)",
-                        "Hace 45 min",
-                        const Color(0xFFD32F2F),
-                      ),
-                      const Divider(height: 1),
-                      _buildLogTile(
-                        "Cama 3 marcada en advertencia por calor (Zona A)",
-                        "Hace 1 hora",
-                        const Color(0xFFF57C00),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
+                // Tabla de datos avanzada
+                _buildDataTableCard(productionList),
 
-                // 6. Botonera de Exportación
-                _localExportButtons(context),
+                const SizedBox(height: 24),
+                _buildSectionTitle("Acciones de Reporte"),
+                const SizedBox(height: 12),
+
+                // Botón universal configurado exclusivamente para tu data de cultivos
+                UniversalExportButtons(
+                  title: "Análisis de Rendimiento de Cultivos",
+                  subtitle:
+                      "Historial de capacidad, volumen de cosecha y métricas ambientales por cama",
+                  csvSheetName: "Rendimiento_Cosechas",
+                  headers: const [
+                    "Ubicación",
+                    "Cultivo",
+                    "Producción",
+                    "Temperatura",
+                    "Humedad",
+                    "Estado",
+                    "Encargado",
+                  ],
+                  rows: rawReportData,
+                ),
               ],
             ),
           );
@@ -394,190 +178,185 @@ class _ProductionReportPageState extends State<ProductionReportPage> {
     );
   }
 
+  // --- COMPONENTES VISUALES TOTALMENTE ADAPTADOS A PRODUCCIÓN ---
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [primaryGreen, lightGreen],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
+      title: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Módulo Producción",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 2),
+          Text(
+            "Rendimiento analítico por cama de cultivo",
+            style: TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) => Text(
+    title,
+    style: const TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: textDark,
+    ),
+  );
+
   Widget _localKpiCard({
     required String title,
     required String value,
-    required String subtitle,
     required Color color,
     required IconData icon,
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.grey.withOpacity(0.1)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  title.toUpperCase(),
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 10,
                     color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                Icon(icon, color: color, size: 20),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-            ),
+            Icon(icon, color: color, size: 22),
           ],
         ),
       ),
     );
   }
 
-  // Gráfica Lineal Avanzada Interactiva
-  Widget _localLineChart(List<ProductionModel> datasets) {
-    List<FlSpot> tempSpots = [];
-    List<FlSpot> humSpots = [];
-
-    for (int i = 0; i < datasets.length; i++) {
-      tempSpots.add(FlSpot(i.toDouble(), datasets[i].temperatura));
-      humSpots.add(FlSpot(i.toDouble(), datasets[i].humedad));
-    }
-
+  Widget _localRealChart({
+    required int estables,
+    required int advertencias,
+    required int criticos,
+  }) {
+    int total = estables + advertencias + criticos;
     return Container(
-      height: 220,
-      padding: const EdgeInsets.only(right: 22, top: 20, bottom: 8, left: 8),
+      height: 180,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
       ),
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: true, drawVerticalLine: false),
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                getTitlesWidget: (value, meta) {
-                  int idx = value.toInt();
-                  if (idx >= 0 && idx < datasets.length) {
-                    return Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        datasets[idx].ubicacion,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  }
-                  return const Text('');
-                },
-              ),
-            ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: true, reservedSize: 35),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: tempSpots,
-              isCurved: true,
-              color: const Color(0xFFF57C00),
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(
-                show: true,
-                color: const Color(0xFFF57C00).withOpacity(0.1),
-              ),
-            ),
-            LineChartBarData(
-              spots: humSpots,
-              isCurved: true,
-              color: Colors.blue.shade700,
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(
-                show: true,
-                color: Colors.blue.shade700.withOpacity(0.05),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWorkerAuditCard({
-    required String name,
-    required String phone,
-    required String performanceText,
-    required Color color,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: color, width: 4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: brown,
-                  fontSize: 15,
-                ),
-              ),
-              Text(
-                phone,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+          Expanded(
+            flex: 4,
+            child: total == 0
+                ? const Center(child: Text("Sin registros activos"))
+                : PieChart(
+                    PieChartData(
+                      sectionsSpace: 4,
+                      centerSpaceRadius: 40,
+                      sections: [
+                        PieChartSectionData(
+                          color: const Color(0xFF2E7D32),
+                          value: estables.toDouble(),
+                          title: '$estables',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          color: const Color(0xFFF57C00),
+                          value: advertencias.toDouble(),
+                          title: '$advertencias',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          color: const Color(0xFFD32F2F),
+                          value: criticos.toDouble(),
+                          title: '$criticos',
+                          radius: 18,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            performanceText,
-            style: TextStyle(
-              color: Colors.grey.shade700,
-              fontSize: 13,
-              height: 1.3,
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 5,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _chartIndicator(
+                  color: const Color(0xFF2E7D32),
+                  text: "Cultivo Estable",
+                ),
+                const SizedBox(height: 6),
+                _chartIndicator(
+                  color: const Color(0xFFF57C00),
+                  text: "En Estrés / Alerta",
+                ),
+                const SizedBox(height: 6),
+                _chartIndicator(
+                  color: const Color(0xFFD32F2F),
+                  text: "Estado Crítico",
+                ),
+              ],
             ),
           ),
         ],
@@ -585,71 +364,101 @@ class _ProductionReportPageState extends State<ProductionReportPage> {
     );
   }
 
-  Widget _buildLogTile(String titulo, String tiempo, Color color) {
-    return ListTile(
-      leading: Icon(Icons.history_toggle_off_rounded, color: color),
-      title: Text(
-        titulo,
-        style: const TextStyle(
-          fontSize: 13,
-          color: brown,
-          fontWeight: FontWeight.w500,
+  Widget _chartIndicator({required Color color, required String text}) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
-      ),
-      trailing: Text(
-        tiempo,
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: textDark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDataTableCard(List<ProductionModel> productionList) {
+    return SizedBox(
+      height: 280,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: DataTable2(
+          columnSpacing: 10,
+          minWidth: 550,
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
+          columns: const [
+            DataColumn2(label: Text("Ubicación"), size: ColumnSize.L),
+            DataColumn2(label: Text("Cultivo"), size: ColumnSize.M),
+            DataColumn2(label: Text("Producción"), size: ColumnSize.S),
+            DataColumn2(label: Text("Estado"), size: ColumnSize.M),
+          ],
+          rows: productionList.map((prod) {
+            return DataRow(
+              onSelectChanged: (_) => _mostrarDetallesCama(prod),
+              cells: [
+                DataCell(
+                  Text(
+                    prod.ubicacion,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+                DataCell(Text(prod.cultivo)),
+                DataCell(
+                  Text(
+                    "${prod.produccionKg.toInt()} Kg",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: prod.estadoColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      prod.estado,
+                      style: TextStyle(
+                        color: prod.estadoColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 
-  Widget _localExportButtons(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Exportando auditoría climática y de kg a PDF...",
-                ),
-              ),
-            ),
-            icon: const Icon(Icons.picture_as_pdf, size: 18),
-            label: const Text("Exportar PDF"),
-          ),
+  void _mostrarDetallesCama(ProductionModel prod) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "🌱 CULTIVO: ${prod.cultivo} (${prod.ubicacion})\n🌡️ Temp: ${prod.temperatura}°C  •  💧 Humedad: ${prod.humedad}%\n👤 Responsable: ${prod.encargado}  •  📞 Tel: ${prod.tel}",
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Descargando matriz completa de rendimiento (Excel)...",
-                ),
-              ),
-            ),
-            icon: const Icon(Icons.table_chart, size: 18),
-            label: const Text("Exportar Excel"),
-          ),
-        ),
-      ],
+        backgroundColor: textDark,
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 }
