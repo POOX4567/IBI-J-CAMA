@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb; // 👈 1. IMPORTA ESTO
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'screens/login_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'package:ibi/utils/notification_service.dart';
@@ -7,14 +8,13 @@ import 'package:ibi/utils/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🛡️ 2. PONLE ESTE CANDADO: Si NO es web, inicializa las notificaciones
-  if (!kIsWeb) {
-    await NotificationService.init();
-  } else {
-    print("Corriendo en Web: Se desactivaron las notificaciones locales.");
-  }
+  // Configuración de fechas en español
+  await initializeDateFormatting('es', null);
 
-  runApp(const MyApp()); // 🚀 Ahora sí llegará aquí de inmediato en Edge/Chrome
+  // Inicializar notificaciones
+  await NotificationService.init();
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
