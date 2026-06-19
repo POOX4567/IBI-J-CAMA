@@ -390,21 +390,20 @@ class _HorariosScreenState extends State<HorariosScreen> {
     final totalRegistros = horarios.length;
     final totalTurnos = horarios.map((h) => h.turno).toSet().length;
 
-    var dashboardStatCard = DashboardStatCard(
-      valor: '$totalRegistros',
-      titulo: 'Horarios activos',
-      icono: Icons.schedule_outlined,
-      color: const Color(0xff2E7D32),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Stats
         Row(
-          crossAxisAlignment: CrossAxisAlignment
-              .start, // Alinea la parte superior por si un texto es más largo
           children: [
-            Expanded(child: dashboardStatCard),
+            Expanded(
+              child: DashboardStatCard(
+                valor: '$totalRegistros',
+                titulo: 'Horarios activos',
+                icono: Icons.schedule_outlined,
+                color: const Color(0xff2E7D32),
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: DashboardStatCard(
@@ -780,38 +779,35 @@ class _HorariosScreenState extends State<HorariosScreen> {
         const SizedBox(height: 20),
 
         // DROPDOWN_SEARCH: búsqueda de área/responsable
+        // CÓDIGO CORREGIDO (Reemplaza el DropdownSearch viejo por este)
         DropdownSearch<String>(
-          items: (filter, _) {
+          items: (filter, infiniteScrollProps) {
+            // <-- Cambiado a 'infiniteScrollProps'
             final nombres = areasList.map((a) => a.area).toList();
+
             if (filter.isEmpty) return nombres;
+
             return nombres
                 .where((n) => n.toLowerCase().contains(filter.toLowerCase()))
                 .toList();
           },
+
           onSelected: (value) {
+            // <-- Cambiado de 'onSelected' a 'onChanged'
             if (value != null) {
               areaProvider.setBusqueda(value);
             } else {
               areaProvider.setBusqueda('');
             }
           },
+
           decoratorProps: const DropDownDecoratorProps(
             decoration: InputDecoration(
               labelText: 'Buscar área o responsable',
-              labelStyle: TextStyle(color: Color(0xff64748B), fontSize: 14),
-              prefixIcon: Icon(Icons.search, color: Color(0xff1B5E20)),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(16)),
-                borderSide: BorderSide.none,
-              ),
+              prefixIcon: Icon(Icons.search),
             ),
           ),
+
           popupProps: const PopupProps.menu(
             showSearchBox: true,
             searchFieldProps: TextFieldProps(

@@ -14,6 +14,7 @@ class AreaDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var withValues = Colors.black.withValues(alpha: 0.12);
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
       appBar: AppBar(
@@ -27,7 +28,6 @@ class AreaDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header con ANIMATIONS: FadeScaleTransition ───────────────────
             PageTransitionSwitcher(
               duration: const Duration(milliseconds: 400),
               transitionBuilder:
@@ -48,7 +48,7 @@ class AreaDetailScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 18,
                       offset: const Offset(0, 10),
                     ),
@@ -143,7 +143,7 @@ class AreaDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 18,
                     offset: const Offset(0, 10),
                   ),
@@ -233,7 +233,6 @@ class AreaDetailScreen extends StatelessWidget {
                 children: [
                   SlidableAction(
                     onPressed: (_) {
-                      // FLUTTERTOAST: confirmación de edición
                       Fluttertoast.showToast(
                         msg: 'Edición de "${area.area}" próximamente',
                         toastLength: Toast.LENGTH_SHORT,
@@ -258,7 +257,7 @@ class AreaDetailScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: const [
-                    Icon(Icons.swipe, color: Color(0xff1B5E20)),
+                    Icon(Icons.swipe, color: Color(0xff2E7D32)),
                     SizedBox(width: 12),
                     Text(
                       'Desliza para editar o eliminar esta área',
@@ -314,7 +313,7 @@ class AreaDetailScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),

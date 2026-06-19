@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart'; // HIVE
 // Tus pantallas y componentes existentes
 import 'screens/login_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
+import 'package:ibi/utils/notification_service.dart';
 
 // Los nuevos módulos de horarios y áreas
 import './screens/screens_horarios/horario_provider.dart';
@@ -19,6 +20,9 @@ void main() async {
 
   // INTL: inicializa los datos de localización en español para fechas y monedas
   await initializeDateFormatting('es', null);
+
+  // Inicializar notificaciones
+  await NotificationService.init();
 
   // HIVE: inicializa el almacenamiento local de datos
   await Hive.initFlutter();

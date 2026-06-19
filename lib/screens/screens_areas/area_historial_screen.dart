@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart'; // ANIMATIONS
+import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart'; // PERCENT_INDICATOR
 import 'package:fluttertoast/fluttertoast.dart'; // FLUTTERTOAST
 import 'package:dropdown_search/dropdown_search.dart'; // DROPDOWN_SEARCH
-import 'area.dart';
+import 'area.dart'; // Importa correctamente el archivo de arriba sin duplicarlo
 
 class AreaHistorialScreen extends StatefulWidget {
   final List<Area> areas;
@@ -15,6 +15,7 @@ class AreaHistorialScreen extends StatefulWidget {
 
 class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
   String? _areaSeleccionada;
+
   List<Area> get _areasFiltradas {
     if (_areaSeleccionada == null || _areaSeleccionada!.isEmpty) {
       return widget.areas;
@@ -30,6 +31,9 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
     final realizadas = _areasFiltradas
         .where((a) => a.estado.toLowerCase().contains('completado'))
         .toList();
+
+    // Obtener la lista de nombres únicos de áreas para el buscador
+    final nombresAreas = widget.areas.map((a) => a.area).toSet().toList();
 
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
@@ -50,7 +54,7 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 14,
                     offset: const Offset(0, 6),
                   ),
@@ -64,12 +68,10 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   const SizedBox(height: 12),
-                  // DROPDOWN_SEARCH: selector con búsqueda en tiempo real
                   DropdownSearch<String>(
-                    items: (filter, _) {
-                      final nombres = widget.areas.map((a) => a.area).toList();
-                      if (filter.isEmpty) return nombres;
-                      return nombres
+                    items: (filter, loadProps) {
+                      if (filter.isEmpty) return nombresAreas;
+                      return nombresAreas
                           .where(
                             (n) =>
                                 n.toLowerCase().contains(filter.toLowerCase()),
@@ -79,7 +81,6 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                     selectedItem: _areaSeleccionada,
                     onSelected: (value) {
                       setState(() => _areaSeleccionada = value);
-                      // FLUTTERTOAST: confirmación de filtro aplicado
                       if (value != null) {
                         Fluttertoast.showToast(
                           msg: 'Filtrando por: $value',
@@ -139,7 +140,7 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha((0.08 * 255).round()),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 18,
                     offset: const Offset(0, 8),
                   ),
@@ -186,7 +187,6 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 14),
-              // ANIMATIONS: cada tarjeta entra con FadeTransition
               ...realizadas.asMap().entries.map(
                 (e) => _buildHistorialCard(e.value, e.key),
               ),
@@ -194,14 +194,23 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
             ],
 
             // ── Pendientes ────────────────────────────────────────────────────
-            const Text(
-              'Actividades pendientes',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 14),
-            ...pendientes.asMap().entries.map(
-              (e) => _buildHistorialCard(e.value, e.key),
-            ),
+            if (pendientes.isNotEmpty) ...[
+              const Text(
+                'Actividades pendientes',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 14),
+              ...pendientes.asMap().entries.map(
+                (e) => _buildHistorialCard(e.value, e.key),
+              ),
+            ] else if (realizadas.isEmpty && pendientes.isEmpty) ...[
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Text('No hay actividades registradas.'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -234,7 +243,6 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
   }
 
   Widget _buildHistorialCard(Area area, int index) {
-    // ANIMATIONS: FadeTransition escalonada por índice
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 300 + index * 80),
@@ -298,7 +306,6 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
               style: const TextStyle(fontSize: 14, color: Colors.black54),
             ),
             const SizedBox(height: 14),
-            // PERCENT_INDICATOR: barra lineal animada
             LinearPercentIndicator(
               lineHeight: 10.0,
               percent: area.progreso,
