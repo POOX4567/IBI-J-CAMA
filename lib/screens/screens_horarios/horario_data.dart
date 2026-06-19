@@ -1,6 +1,6 @@
 import 'horario.dart';
 
-const List<Horario> horarios = [
+final List<Horario> horariosIniciales = [
   Horario(
     nombre: 'Juan Pérez',
     turno: 'Matutino',
