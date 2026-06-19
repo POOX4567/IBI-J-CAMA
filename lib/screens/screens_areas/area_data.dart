@@ -1,6 +1,6 @@
 import 'area.dart';
 
-final List<Area> areas = [
+final List<Area> areasIniciales = [
   Area(
     empleado: 'Juan Pérez',
     area: 'Invernadero A',

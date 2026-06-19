@@ -1,13 +1,83 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // INTL: fechas en español
+import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart'
+    as picker; // FLUTTER_DATETIME_PICKER
+import 'package:provider/provider.dart'; // PROVIDER
+import 'package:flutter_slidable/flutter_slidable.dart'; // FLUTTER_SLIDABLE
+import 'package:fl_chart/fl_chart.dart'; // FL_CHART
 import 'horario.dart';
+import 'horario_provider.dart';
 
-class HorarioDetailScreen extends StatelessWidget {
+class HorarioDetailScreen extends StatefulWidget {
   final Horario horario;
 
   const HorarioDetailScreen({super.key, required this.horario});
 
   @override
+  State<HorarioDetailScreen> createState() => _HorarioDetailScreenState();
+}
+
+class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
+  late Horario _horario;
+
+  @override
+  void initState() {
+    super.initState();
+    _horario = widget.horario;
+  }
+
+  // INTL: formatea una fecha en español
+  String _formatearFecha(String fecha) {
+    try {
+      final d = DateFormat('dd/MM/yyyy').parse(fecha);
+      return DateFormat("d 'de' MMMM yyyy", 'es').format(d);
+    } catch (_) {
+      return fecha;
+    }
+  }
+
+  // FLUTTER_DATETIME_PICKER: selector de nueva fecha/hora de entrada
+  void _seleccionarEntrada(BuildContext context) {
+    picker.DatePicker.showTimePicker(
+      context,
+      locale: picker.LocaleType.es,
+      showTitleActions: true,
+      onConfirm: (time) {
+        // PROVIDER: notifica el cambio al provider global
+        final hora = DateFormat('HH:mm').format(time);
+        context.read<HorarioProvider>().actualizarEntrada(
+          _horario.nombre,
+          hora,
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Entrada actualizada: $hora')));
+      },
+    );
+  }
+
+  // FLUTTER_DATETIME_PICKER: selector de nueva fecha/hora de salida
+  void _seleccionarSalida(BuildContext context) {
+    picker.DatePicker.showTimePicker(
+      context,
+      locale: picker.LocaleType.es,
+      showTitleActions: true,
+      onConfirm: (time) {
+        final hora = DateFormat('HH:mm').format(time);
+        context.read<HorarioProvider>().actualizarSalida(_horario.nombre, hora);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Salida actualizada: $hora')));
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // PROVIDER: escucha cambios globales en horarios
+    final provider = context.watch<HorarioProvider>();
+    final horarioActual = provider.obtenerHorario(_horario.nombre) ?? _horario;
+
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
       appBar: AppBar(
@@ -21,6 +91,7 @@ class HorarioDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Header ──────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -36,7 +107,7 @@ class HorarioDetailScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
+                      const CircleAvatar(
                         radius: 30,
                         backgroundColor: Colors.white24,
                         child: Icon(
@@ -51,7 +122,7 @@ class HorarioDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              horario.nombre,
+                              horarioActual.nombre,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 22,
@@ -60,7 +131,7 @@ class HorarioDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              horario.turno,
+                              horarioActual.turno,
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 15,
@@ -78,14 +149,21 @@ class HorarioDetailScreen extends StatelessWidget {
                       horizontal: 16,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _headerInfo('Inicio', horario.fechaInicio),
-                        _headerInfo('Fin', horario.fechaFin),
+                        // INTL: muestra fechas en español
+                        _headerInfo(
+                          'Inicio',
+                          _formatearFecha(horarioActual.fechaInicio),
+                        ),
+                        _headerInfo(
+                          'Fin',
+                          _formatearFecha(horarioActual.fechaFin),
+                        ),
                       ],
                     ),
                   ),
@@ -93,6 +171,90 @@ class HorarioDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
+
+            // ── Info del turno con FLUTTER_SLIDABLE ──────────────────────────
+            const Text(
+              'Información del turno',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            // FLUTTER_SLIDABLE: desliza para editar la hora de entrada
+            Slidable(
+              key: const ValueKey('entrada'),
+              endActionPane: ActionPane(
+                motion: const ScrollMotion(),
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _seleccionarEntrada(context),
+                    backgroundColor: const Color(0xff1B5E20),
+                    foregroundColor: Colors.white,
+                    icon: Icons.edit,
+                    label: 'Editar',
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ],
+              ),
+              child: _detailCard(
+                icon: Icons.login,
+                label: 'Entrada',
+                value: horarioActual.entrada,
+                color: Colors.green,
+                hint: 'Desliza para editar',
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // FLUTTER_SLIDABLE: desliza para editar la hora de salida
+            Slidable(
+              key: const ValueKey('salida'),
+              endActionPane: ActionPane(
+                motion: const ScrollMotion(),
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _seleccionarSalida(context),
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    icon: Icons.edit,
+                    label: 'Editar',
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ],
+              ),
+              child: _detailCard(
+                icon: Icons.logout,
+                label: 'Salida',
+                value: horarioActual.salida,
+                color: Colors.red,
+                hint: 'Desliza para editar',
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            _detailCard(
+              icon: Icons.construction,
+              label: 'Actividad',
+              value: horarioActual.actividad,
+              color: const Color(0xff43A047),
+            ),
+            const SizedBox(height: 10),
+            _detailCard(
+              icon: Icons.event_available,
+              label: 'Turno',
+              value: horarioActual.turno,
+              color: const Color(0xff1B5E20),
+            ),
+            const SizedBox(height: 10),
+            _detailCard(
+              icon: Icons.date_range,
+              label: 'Período',
+              value:
+                  '${_formatearFecha(horarioActual.fechaInicio)} — ${_formatearFecha(horarioActual.fechaFin)}',
+              color: Colors.grey.shade700,
+            ),
+            const SizedBox(height: 24),
+
+            // ── FL_CHART: gráfica de horas trabajadas por turno ──────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -100,58 +262,90 @@ class HorarioDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 12),
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Información del turno',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    'Horas trabajadas por turno',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Distribución semanal estimada',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                   const SizedBox(height: 18),
-                  _detailRow(
-                    icon: Icons.login,
-                    label: 'Entrada',
-                    value: horario.entrada,
-                    color: Colors.green,
-                  ),
-                  const SizedBox(height: 14),
-                  _detailRow(
-                    icon: Icons.logout,
-                    label: 'Salida',
-                    value: horario.salida,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 14),
-                  _detailRow(
-                    icon: Icons.construction,
-                    label: 'Actividad',
-                    value: horario.actividad,
-                    color: const Color(0xff43A047),
-                  ),
-                  const SizedBox(height: 14),
-                  _detailRow(
-                    icon: Icons.event_available,
-                    label: 'Turno',
-                    value: horario.turno,
-                    color: const Color(0xff1B5E20),
-                  ),
-                  const SizedBox(height: 14),
-                  _detailRow(
-                    icon: Icons.date_range,
-                    label: 'Período',
-                    value: '${horario.fechaInicio} - ${horario.fechaFin}',
-                    color: Colors.grey.shade700,
+                  SizedBox(
+                    height: 180,
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: 10,
+                        barTouchData: BarTouchData(enabled: true),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 28,
+                              getTitlesWidget: (value, meta) => Text(
+                                '${value.toInt()}h',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                const dias = [
+                                  'Lun',
+                                  'Mar',
+                                  'Mié',
+                                  'Jue',
+                                  'Vie',
+                                ];
+                                final i = value.toInt();
+                                if (i < 0 || i >= dias.length) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Text(
+                                  dias[i],
+                                  style: const TextStyle(fontSize: 11),
+                                );
+                              },
+                            ),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                        ),
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: [
+                          _barGroup(0, 8, horarioActual.colorTurno),
+                          _barGroup(1, 9, horarioActual.colorTurno),
+                          _barGroup(2, 7.5, horarioActual.colorTurno),
+                          _barGroup(3, 8.5, horarioActual.colorTurno),
+                          _barGroup(4, 6, horarioActual.colorTurno),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 18),
+
+            // ── Notas ─────────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -159,16 +353,17 @@ class HorarioDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(color: Colors.green.shade100),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
                     'Notas',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   SizedBox(height: 12),
                   Text(
-                    'Revisa los horarios con antelación para evitar solapamientos. Este turno es el más importante para coordinar con el equipo.',
+                    'Revisa los horarios con antelación para evitar solapamientos. '
+                    'Este turno es el más importante para coordinar con el equipo.',
                     style: TextStyle(color: Colors.black87, height: 1.5),
                   ),
                 ],
@@ -180,13 +375,92 @@ class HorarioDetailScreen extends StatelessWidget {
     );
   }
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  BarChartGroupData _barGroup(int x, double y, Color color) {
+    return BarChartGroupData(
+      x: x,
+      barRods: [
+        BarChartRodData(
+          toY: y,
+          color: color,
+          width: 18,
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    String? hint,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                if (hint != null)
+                  Text(
+                    hint,
+                    style: const TextStyle(color: Colors.grey, fontSize: 11),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _headerInfo(String title, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.8),
+            fontSize: 13,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -194,47 +468,7 @@ class HorarioDetailScreen extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _detailRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(color: Colors.grey.shade800, fontSize: 14),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
+            fontSize: 15,
           ),
         ),
       ],
