@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
 import '../../utils/maintenance_helpers.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ibi/screens/screens_empleados/chat_screen.dart';
 
 class MaintenanceCard extends StatelessWidget {
   final MaintenanceRequest request;
@@ -544,8 +545,22 @@ class MaintenanceCard extends StatelessWidget {
               ),
               title: const Text("Enviar mensaje interno"),
               onTap: () {
-                Navigator.pop(ctx);
-                _abrirChatSimulado(context, persona);
+                Navigator.pop(ctx); // Cierra el menú de abajo
+
+                // Navegamos a tu ChatScreen oficial
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreen(
+                      nombre: persona,
+                      rol: 'Técnico de Mantenimiento',
+                      // Como aún no tenemos fotos reales en el mock_data,
+                      // esta API gratuita generará un avatar verde con las iniciales del técnico:
+                      fotoUrl:
+                          'https://ui-avatars.com/api/?name=${persona.replaceAll(' ', '+')}&background=81C784&color=fff',
+                    ),
+                  ),
+                );
               },
             ),
           ],
