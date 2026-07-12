@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/invernadero.dart';
+import '../models/lectura_sensor.dart';
+import '../services/api_service.dart';
+import '../widgets/invernaderos/summary_card.dart';
+import '../widgets/invernaderos/invernadero_card.dart';
+import '../widgets/invernaderos/humedad_chart.dart';
 
-class InvernaderosScreen extends StatelessWidget {
+class InvernaderosScreen extends StatefulWidget {
   const InvernaderosScreen({super.key});
 
+  @override
+  State<InvernaderosScreen> createState() => _InvernaderosScreenState();
+}
+
+class _InvernaderosScreenState extends State<InvernaderosScreen> {
   static const Color primaryGreen = Color(0xFF2E7D32);
   static const Color lightGreen = Color(0xFF66BB6A);
   static const Color brown = Color(0xFF5D4037);
@@ -14,281 +23,205 @@ class InvernaderosScreen extends StatelessWidget {
   static const Color critical = Color(0xFFD32F2F);
   static const Color infoBlue = Color(0xFF1976D2);
 
+  final ApiService _apiService = ApiService();
+
+  late Future<_InvernaderoData> _futureData;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureData = _loadData();
+  }
+
+  Future<_InvernaderoData> _loadData() async {
+    final results = await Future.wait([
+      _apiService.obtenerInvernaderos(),
+      _apiService.obtenerLecturasSensores(),
+    ]);
+
+    return _InvernaderoData(
+      invernaderos: results[0] as List<Invernadero>,
+      lecturas: results[1] as List<LecturaSensor>,
+    );
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _futureData = _loadData();
+    });
+  }
+
+double _ultimaLectura(List<LecturaSensor> lecturas, String filtro) {
+  final filtradas = lecturas.where((lectura) {
+    final nombre = lectura.nombreSensor.toLowerCase();
+    final descripcion = lectura.descripcion.toLowerCase();
+
+    return nombre.contains(filtro) || descripcion.contains(filtro);
+  }).toList();
+
+  if (filtradas.isEmpty) return 0;
+
+  filtradas.sort((a, b) => a.id.compareTo(b.id));
+
+  return double.tryParse(filtradas.last.valor) ?? 0;
+}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 90),
-          children: [
-            _Header(),
+        child: FutureBuilder<_InvernaderoData>(
+          future: _futureData,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: primaryGreen,
+                ),
+              );
+            }
 
-            const SizedBox(height: 16),
+            if (snapshot.hasError) {
+              return _ErrorView(
+                message: snapshot.error.toString(),
+                onRetry: _refresh,
+              );
+            }
 
-            const Row(
-              children: [
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Zonas activas',
-                    value: '3',
-                    color: primaryGreen,
-                    icon: Icons.grid_view_rounded,
+            if (!snapshot.hasData) {
+              return const Center(
+                child: Text('No hay datos disponibles'),
+              );
+            }
+
+            final data = snapshot.data!;
+            final invernaderos = data.invernaderos;
+            final lecturas = data.lecturas;
+
+            final humedadActual = _ultimaLectura(lecturas, 'humedad');
+            final temperaturaActual = _ultimaLectura(lecturas, 'temperatura');
+
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              color: primaryGreen,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 90),
+                children: [
+                  _Header(totalInvernaderos: invernaderos.length),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SummaryCard(
+                          title: 'Invernaderos',
+                          value: '${invernaderos.length}',
+                          color: primaryGreen,
+                          icon: Icons.grid_view_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SummaryCard(
+                          title: 'Lecturas',
+                          value: '${lecturas.length}',
+                          color: brown,
+                          icon: Icons.sensors,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Total de camas',
-                    value: '9',
-                    color: brown,
-                    icon: Icons.grass,
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SummaryCard(
+                          title: 'Humedad actual',
+                          value: '${humedadActual.toStringAsFixed(1)}%',
+                          color: infoBlue,
+                          icon: Icons.water_drop_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SummaryCard(
+                          title: 'Temp. actual.',
+                          value: '${temperaturaActual.toStringAsFixed(1)}°C',
+                          color: warning,
+                          icon: Icons.thermostat,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: 12),
+                  const SizedBox(height: 18),
 
-            const Row(
-              children: [
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Cultivos',
-                    value: '2',
-                    color: warning,
-                    icon: Icons.eco,
+                  HumedadChart(lecturas: lecturas),
+
+                  const SizedBox(height: 22),
+
+                  const Text(
+                    'Invernaderos registrados',
+                    style: TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.bold,
+                      color: brown,
+                    ),
                   ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _SummaryCard(
-                    title: 'Alertas',
-                    value: '2',
-                    color: critical,
-                    icon: Icons.warning_amber_rounded,
-                  ),
-                ),
-              ],
-            ),
 
-            Container(
-  height: 250,
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Humedad promedio semanal',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+                  const SizedBox(height: 12),
 
-      const SizedBox(height: 20),
+                  if (invernaderos.isEmpty)
+                    const _EmptyView()
+                  else
+                    ...invernaderos.map((invernadero) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: InvernaderoCard(
+                          invernadero: invernadero,
+                          onTap: () {
+                            _showInvernaderoDetails(
+                              context,
+                              invernadero,
+                              lecturas,
+                            );
+                          },
+                        ),
+                      );
+                    }),
 
-      Expanded(
-        child: LineChart(
-          LineChartData(
-            gridData: const FlGridData(show: true),
+                  const SizedBox(height: 24),
 
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(showTitles: true),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    const dias = [
-                      'L',
-                      'M',
-                      'M',
-                      'J',
-                      'V',
-                      'S',
-                      'D'
-                    ];
+                  const Text(
+                    'Historial general',
+                    style: TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.bold,
+                      color: brown,
+                    ),
+                  ),//////////////////////////
 
-                    if (value.toInt() >= 0 &&
-                        value.toInt() < dias.length) {
-                      return Text(dias[value.toInt()]);
-                    }
+                  const SizedBox(height: 12),
 
-                    return const Text('');
-                  },
-                ),
-              ),
-            ),
-
-            borderData: FlBorderData(show: true),
-
-            lineBarsData: [
-              LineChartBarData(
-                isCurved: true,
-                spots: const [
-                  FlSpot(0, 45),
-                  FlSpot(1, 50),
-                  FlSpot(2, 47),
-                  FlSpot(3, 60),
-                  FlSpot(4, 55),
-                  FlSpot(5, 62),
-                  FlSpot(6, 58),
+                  _GeneralLogCard(lecturas: lecturas),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-
-            const SizedBox(height: 22),
-
-            const Text(
-              'Zonas del invernadero',
-              style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.bold,
-                color: brown,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            _ZoneCard(
-              zoneName: 'Zona A',
-              beds: '3 camas',
-              crops: 'Jícama, Tomate',
-              status: 'Estable',
-              statusColor: primaryGreen,
-              responsible: '2 encargados',
-              lastReview: 'Hoy, 08:30 AM',
-              onTap: () {
-                _showZoneDetails(
-                  context,
-                  zoneName: 'Zona A',
-                  status: 'Estable',
-                  statusColor: primaryGreen,
-                  beds: const [
-                    _BedData('Cama 1', 'Jícama', '26.5°C', '45%', 'Estable', primaryGreen),
-                    _BedData('Cama 2', 'Jícama', '27.1°C', '48%', 'Estable', primaryGreen),
-                    _BedData('Cama 3', 'Tomate', '29.4°C', '35%', 'Advertencia', warning),
-                  ],
-                  workers: const [
-                    _WorkerData('Juan Pérez', '999 123 4567'),
-                    _WorkerData('Ana López', '999 222 3344'),
-                  ],
-                  logs: const [
-                    'Revisión completada por encargado',
-                    'Cama 3 marcada en advertencia',
-                    'Actualización de sensores registrada',
-                  ],
-                );
-              },
-            ),
-
-            const SizedBox(height: 14),
-
-            _ZoneCard(
-              zoneName: 'Zona B',
-              beds: '4 camas',
-              crops: 'Jícama, tomate',
-              status: 'Advertencia',
-              statusColor: warning,
-              responsible: '1 encargado',
-              lastReview: 'Hoy, 09:10 AM',
-              onTap: () {
-                _showZoneDetails(
-                  context,
-                  zoneName: 'Zona B',
-                  status: 'Advertencia',
-                  statusColor: warning,
-                  beds: const [
-                    _BedData('Cama 1', 'Jícama', '31.2°C', '32%', 'Advertencia', warning),
-                    _BedData('Cama 2', 'Jícama', '30.8°C', '34%', 'Advertencia', warning),
-                    _BedData('Cama 3', 'tomate', '28.7°C', '41%', 'Estable', primaryGreen),
-                    _BedData('Cama 4', 'Jícama', '29.9°C', '37%', 'Estable', primaryGreen),
-                  ],
-                  workers: const [
-                    _WorkerData('Marcos Chan', '999 555 7812'),
-                  ],
-                  logs: const [
-                    'Humedad baja detectada en cama 1',
-                    'Revisión pendiente de aspersores',
-                    'Zona marcada como advertencia',
-                  ],
-                );
-              },
-            ),
-
-            const SizedBox(height: 14),
-
-            _ZoneCard(
-              zoneName: 'Zona C',
-              beds: '2 camas',
-              crops: 'Jícama',
-              status: 'Crítico',
-              statusColor: critical,
-              responsible: '1 encargado',
-              lastReview: 'Hoy, 07:45 AM',
-              onTap: () {
-                _showZoneDetails(
-                  context,
-                  zoneName: 'Zona C',
-                  status: 'Crítico',
-                  statusColor: critical,
-                  beds: const [
-                    _BedData('Cama 1', 'Jícama', '34.8°C', '25%', 'Crítico', critical),
-                    _BedData('Cama 2', 'Jícama', '33.9°C', '28%', 'Crítico', critical),
-                  ],
-                  workers: const [
-                    _WorkerData('Elena Vance', '999 777 9012'),
-                  ],
-                  logs: const [
-                    'Alerta crítica generada',
-                    'Sensor de humedad requiere revisión',
-                    'Se notificó al área de mantenimiento',
-                  ],
-                );
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              'Historial general',
-              style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.bold,
-                color: brown,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            const _GeneralLogCard(),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  static void _showZoneDetails(
-    BuildContext context, {
-    required String zoneName,
-    required String status,
-    required Color statusColor,
-    required List<_BedData> beds,
-    required List<_WorkerData> workers,
-    required List<String> logs,
-  }) {
+  void _showInvernaderoDetails(
+    BuildContext context,
+    Invernadero invernadero,
+    List<LecturaSensor> lecturas,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -325,7 +258,7 @@ class InvernaderosScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Detalle de $zoneName',
+                          invernadero.nombre,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -333,54 +266,92 @@ class InvernaderosScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _StatusBadge(label: status, color: statusColor),
+                      _StatusBadge(label: 'Activo', color: primaryGreen),
                     ],
                   ),
 
                   const SizedBox(height: 18),
 
-                  const Text(
-                    'Camas de cultivo',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                      color: brown,
-                    ),
+                  _DetailCard(
+                    title: 'Información del invernadero',
+                    children: [
+                      _DetailLine(
+                        icon: Icons.description_outlined,
+                        label: 'Descripción',
+                        value: invernadero.descripcion,
+                      ),
+                      _DetailLine(
+                        icon: Icons.location_on_outlined,
+                        label: 'Latitud',
+                        value: invernadero.latitud,
+                      ),
+                      _DetailLine(
+                        icon: Icons.location_on_outlined,
+                        label: 'Longitud',
+                        value: invernadero.longitud,
+                      ),
+                      _DetailLine(
+                        icon: Icons.straighten,
+                        label: 'Ancho',
+                        value: '${invernadero.ancho} m',
+                      ),
+                      _DetailLine(
+                        icon: Icons.height,
+                        label: 'Alto',
+                        value: '${invernadero.alto} m',
+                      ),
+                      _DetailLine(
+                        icon: Icons.swap_horiz,
+                        label: 'Largo',
+                        value: '${invernadero.largo} m',
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(height: 10),
-
-                  ...beds.map((bed) => _BedCard(bed: bed)),
 
                   const SizedBox(height: 18),
 
-                  const Text(
-                    'Encargados de zona',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                      color: brown,
-                    ),
+                  _DetailCard(
+                    title: 'Lecturas de sensores',
+                    children: lecturas.isEmpty
+                        ? [
+                            const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Text('No hay lecturas disponibles'),
+                            ),
+                          ]
+                        : lecturas.map((lectura) {
+                            return _SensorReadingCard(lectura: lectura);
+                          }).toList(),
                   ),
-
-                  const SizedBox(height: 10),
-
-                  ...workers.map((worker) => _WorkerCard(worker: worker)),
 
                   const SizedBox(height: 18),
 
-                  const Text(
-                    'Historial de la zona',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                      color: brown,
-                    ),
+                  _DetailCard(
+                    title: 'Encargados de zona',
+                    children: const [
+                      _StaticWorkerCard(
+                        name: 'Encargado del invernadero',
+                        phone: 'Sin teléfono asignado',
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 18),
 
-                  ...logs.map((log) => _ZoneLogItem(text: log)),
+                  _DetailCard(
+                    title: 'Historial del invernadero',
+                    children: const [
+                      _ZoneLogItem(
+                        text: 'Información actualizada desde la API',
+                      ),
+                      _ZoneLogItem(
+                        text: 'Lecturas de sensores consultadas correctamente',
+                      ),
+                      _ZoneLogItem(
+                        text: 'Supervisión general del invernadero activa',
+                      ),
+                    ],
+                  ),
                 ],
               ),
             );
@@ -391,7 +362,23 @@ class InvernaderosScreen extends StatelessWidget {
   }
 }
 
+class _InvernaderoData {
+  final List<Invernadero> invernaderos;
+  final List<LecturaSensor> lecturas;
+
+  const _InvernaderoData({
+    required this.invernaderos,
+    required this.lecturas,
+  });
+}
+
 class _Header extends StatelessWidget {
+  final int totalInvernaderos;
+
+  const _Header({
+    required this.totalInvernaderos,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -400,17 +387,17 @@ class _Header extends StatelessWidget {
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            InvernaderosScreen.primaryGreen,
-            InvernaderosScreen.lightGreen,
+            _InvernaderosScreenState.primaryGreen,
+            _InvernaderosScreenState.lightGreen,
           ],
           begin: Alignment.bottomLeft,
           end: Alignment.topRight,
         ),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Gestión de\nInvernaderos',
             style: TextStyle(
               fontSize: 29,
@@ -419,10 +406,10 @@ class _Header extends StatelessWidget {
               color: Colors.white,
             ),
           ),
-          SizedBox(height: 14),
+          const SizedBox(height: 14),
           Text(
-            'Supervisando 3 zonas y 9 camas de cultivo',
-            style: TextStyle(
+            'Supervisando $totalInvernaderos invernadero(s) registrado(s)',
+            style: const TextStyle(
               fontSize: 17,
               height: 1.4,
               color: Colors.white70,
@@ -435,151 +422,52 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-  final IconData icon;
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
 
-  const _SummaryCard({
-    required this.title,
-    required this.value,
-    required this.color,
-    required this.icon,
+  const _ErrorView({
+    required this.message,
+    required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 118,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: color.withOpacity(0.75), width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ZoneCard extends StatelessWidget {
-  final String zoneName;
-  final String beds;
-  final String crops;
-  final String status;
-  final Color statusColor;
-  final String responsible;
-  final String lastReview;
-  final VoidCallback onTap;
-
-  const _ZoneCard({
-    required this.zoneName,
-    required this.beds,
-    required this.crops,
-    required this.status,
-    required this.statusColor,
-    required this.responsible,
-    required this.lastReview,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(left: BorderSide(color: statusColor, width: 5)),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.09),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return Center(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    zoneName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: InvernaderosScreen.brown,
-                    ),
-                  ),
-                ),
-                _StatusBadge(label: status, color: statusColor),
-              ],
+            const Icon(
+              Icons.error_outline,
+              size: 60,
+              color: _InvernaderosScreenState.critical,
             ),
-
-            const SizedBox(height: 14),
-
-            _InfoLine(
-              icon: Icons.view_agenda_outlined,
-              label: 'Cantidad de camas',
-              value: beds,
+            const SizedBox(height: 16),
+            const Text(
+              'No se pudieron cargar los datos',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: _InvernaderosScreenState.brown,
+              ),
             ),
-            _InfoLine(
-              icon: Icons.eco_outlined,
-              label: 'Cultivos',
-              value: crops,
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54),
             ),
-            _InfoLine(
-              icon: Icons.people_alt_outlined,
-              label: 'Encargados',
-              value: responsible,
-            ),
-            _InfoLine(
-              icon: Icons.access_time,
-              label: 'Última revisión',
-              value: lastReview,
-            ),
-
-            const SizedBox(height: 14),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onTap,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Ver detalles'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: InvernaderosScreen.primaryGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _InvernaderosScreenState.primaryGreen,
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -589,45 +477,24 @@ class _ZoneCard extends StatelessWidget {
   }
 }
 
-class _InfoLine extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _EmptyView extends StatelessWidget {
+  const _EmptyView();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: InvernaderosScreen.brown),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: InvernaderosScreen.brown,
-              ),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: InvernaderosScreen.primaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'No hay invernaderos registrados.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: _InvernaderosScreenState.brown,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -663,77 +530,200 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _BedData {
-  final String name;
-  final String crop;
-  final String temperature;
-  final String humidity;
-  final String status;
-  final Color statusColor;
+class _DetailCard extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
 
-  const _BedData(
-    this.name,
-    this.crop,
-    this.temperature,
-    this.humidity,
-    this.status,
-    this.statusColor,
-  );
-}
-
-class _WorkerData {
-  final String name;
-  final String phone;
-
-  const _WorkerData(this.name, this.phone);
-}
-
-class _BedCard extends StatelessWidget {
-  final _BedData bed;
-
-  const _BedCard({required this.bed});
+  const _DetailCard({
+    required this.title,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 11),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: bed.statusColor, width: 4)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  bed.name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: InvernaderosScreen.brown,
-                  ),
-                ),
-              ),
-              _StatusBadge(label: bed.status, color: bed.statusColor),
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.bold,
+              color: _InvernaderosScreenState.brown,
+            ),
           ),
-          const SizedBox(height: 10),
-          _InfoLine(icon: Icons.eco, label: 'Cultivo', value: bed.crop),
-          _InfoLine(icon: Icons.thermostat, label: 'Temperatura', value: bed.temperature),
-          _InfoLine(icon: Icons.water_drop_outlined, label: 'Humedad', value: bed.humidity),
+          const SizedBox(height: 12),
+          ...children,
         ],
       ),
     );
   }
 }
 
-class _WorkerCard extends StatelessWidget {
-  final _WorkerData worker;
+class _DetailLine extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
 
-  const _WorkerCard({required this.worker});
+  const _DetailLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: _InvernaderosScreenState.primaryGreen,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: _InvernaderosScreenState.brown,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: _InvernaderosScreenState.primaryGreen,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SensorReadingCard extends StatelessWidget {
+  final LecturaSensor lectura;
+
+  const _SensorReadingCard({
+    required this.lectura,
+  });
+
+  IconData get _icon {
+    final text =
+        '${lectura.nombreSensor} ${lectura.descripcion}'.toLowerCase();
+
+    if (text.contains('humedad')) {
+      return Icons.water_drop_outlined;
+    }
+
+    if (text.contains('temp')) {
+      return Icons.thermostat;
+    }
+
+    return Icons.sensors;
+  }
+
+  String get _unidad {
+    final text =
+        '${lectura.nombreSensor} ${lectura.descripcion}'.toLowerCase();
+
+    if (text.contains('humedad')) {
+      return '%';
+    }
+
+    if (text.contains('temp')) {
+      return '°C';
+    }
+
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 11),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: _InvernaderosScreenState.background,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(
+          color: _InvernaderosScreenState.primaryGreen.withOpacity(.20),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _icon,
+            color: _InvernaderosScreenState.primaryGreen,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  lectura.nombreSensor,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _InvernaderosScreenState.brown,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${lectura.descripcion} • ${lectura.modelo}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  lectura.lecturaDatetime,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${lectura.valor}$_unidad',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: _InvernaderosScreenState.primaryGreen,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StaticWorkerCard extends StatelessWidget {
+  final String name;
+  final String phone;
+
+  const _StaticWorkerCard({
+    required this.name,
+    required this.phone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -741,29 +731,29 @@ class _WorkerCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 11),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _InvernaderosScreenState.background,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           const CircleAvatar(
-            backgroundColor: InvernaderosScreen.primaryGreen,
+            backgroundColor: _InvernaderosScreenState.primaryGreen,
             child: Icon(Icons.person, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              worker.name,
+              name,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
-                color: InvernaderosScreen.brown,
+                color: _InvernaderosScreenState.brown,
               ),
             ),
           ),
           Text(
-            worker.phone,
+            phone,
             style: const TextStyle(
-              color: InvernaderosScreen.primaryGreen,
+              color: _InvernaderosScreenState.primaryGreen,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -776,7 +766,9 @@ class _WorkerCard extends StatelessWidget {
 class _ZoneLogItem extends StatelessWidget {
   final String text;
 
-  const _ZoneLogItem({required this.text});
+  const _ZoneLogItem({
+    required this.text,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -784,17 +776,22 @@ class _ZoneLogItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _InvernaderosScreenState.background,
         borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
         children: [
-          const Icon(Icons.history, color: InvernaderosScreen.primaryGreen),
+          const Icon(
+            Icons.history,
+            color: _InvernaderosScreenState.primaryGreen,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(color: InvernaderosScreen.brown),
+              style: const TextStyle(
+                color: _InvernaderosScreenState.brown,
+              ),
             ),
           ),
         ],
@@ -804,15 +801,15 @@ class _ZoneLogItem extends StatelessWidget {
 }
 
 class _GeneralLogCard extends StatelessWidget {
-  const _GeneralLogCard();
+  final List<LecturaSensor> lecturas;
+
+  const _GeneralLogCard({
+    required this.lecturas,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final logs = [
-      ['Zona B marcada en advertencia', 'Hace 15 min', Icons.warning_amber_rounded, InvernaderosScreen.warning],
-      ['Sensores actualizados en Zona A', 'Hace 30 min', Icons.sensors, InvernaderosScreen.primaryGreen],
-      ['Alerta crítica generada en Zona C', 'Hace 1 hora', Icons.error_outline, InvernaderosScreen.critical],
-    ];
+    final ultimasLecturas = lecturas.take(3).toList();
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -820,21 +817,36 @@ class _GeneralLogCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        children: logs.map((log) {
-          return ListTile(
-            leading: Icon(log[2] as IconData, color: log[3] as Color),
-            title: Text(
-              log[0] as String,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: InvernaderosScreen.brown,
+      child: ultimasLecturas.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No hay historial reciente.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _InvernaderosScreenState.brown,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+            )
+          : Column(
+              children: ultimasLecturas.map((lectura) {
+                return ListTile(
+                  leading: const Icon(
+                    Icons.sensors,
+                    color: _InvernaderosScreenState.primaryGreen,
+                  ),
+                  title: Text(
+                    '${lectura.nombreSensor}: ${lectura.valor}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _InvernaderosScreenState.brown,
+                    ),
+                  ),
+                  subtitle: Text(lectura.lecturaDatetime),
+                );
+              }).toList(),
             ),
-            subtitle: Text(log[1] as String),
-          );
-        }).toList(),
-      ),
     );
   }
 }
