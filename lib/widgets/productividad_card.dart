@@ -21,7 +21,10 @@ class ProductividadCard extends StatelessWidget {
         children: [
           Text(cultivo),
           const SizedBox(height: 10),
-          LinearProgressIndicator(value: valor, color: color),
+          LinearProgressIndicator(
+            value: (valor / 100).clamp(0.0, 1.0),
+            color: color,
+          ),
         ],
       ),
     );

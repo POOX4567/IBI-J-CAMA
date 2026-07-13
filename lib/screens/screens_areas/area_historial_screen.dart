@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart'; // PERCENT_INDICATOR
 import 'package:fluttertoast/fluttertoast.dart'; // FLUTTERTOAST
-import 'package:dropdown_search/dropdown_search.dart'; // DROPDOWN_SEARCH
 import 'area.dart'; // Importa correctamente el archivo de arriba sin duplicarlo
 
 class AreaHistorialScreen extends StatefulWidget {
@@ -14,13 +13,25 @@ class AreaHistorialScreen extends StatefulWidget {
 }
 
 class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
-  String? _areaSeleccionada;
+  // 👇 Filtro por ESTADO (antes era por nombre de área).
+  // 'Todos' muestra las tres categorías; cualquier otro valor filtra
+  // exclusivamente por ese estado.
+  static const List<String> _estados = [
+    'Todos',
+    'Pendiente',
+    'En progreso',
+    'Completado',
+  ];
+
+  String _estadoSeleccionado = 'Todos';
 
   List<Area> get _areasFiltradas {
-    if (_areaSeleccionada == null || _areaSeleccionada!.isEmpty) {
-      return widget.areas;
-    }
-    return widget.areas.where((a) => a.area == _areaSeleccionada).toList();
+    if (_estadoSeleccionado == 'Todos') return widget.areas;
+    return widget.areas
+        .where(
+          (a) => a.estado.toLowerCase() == _estadoSeleccionado.toLowerCase(),
+        )
+        .toList();
   }
 
   @override
@@ -28,12 +39,16 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
     final pendientes = _areasFiltradas
         .where((a) => a.estado.toLowerCase().contains('pendiente'))
         .toList();
+    final enProgreso = _areasFiltradas
+        .where(
+          (a) =>
+              a.estado.toLowerCase().contains('progreso') &&
+              !a.estado.toLowerCase().contains('pendiente'),
+        )
+        .toList();
     final realizadas = _areasFiltradas
         .where((a) => a.estado.toLowerCase().contains('completado'))
         .toList();
-
-    // Obtener la lista de nombres únicos de áreas para el buscador
-    final nombresAreas = widget.areas.map((a) => a.area).toSet().toList();
 
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
@@ -46,7 +61,7 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── DROPDOWN_SEARCH: búsqueda/filtro de área ────────────────────
+            // ── Filtro por ESTADO (ChoiceChip) ──────────────────────────────
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -64,69 +79,53 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Filtrar por área',
+                    'Filtrar por estado',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   const SizedBox(height: 12),
-                  DropdownSearch<String>(
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return nombresAreas;
-                      return nombresAreas
-                          .where(
-                            (n) =>
-                                n.toLowerCase().contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    selectedItem: _areaSeleccionada,
-                    onSelected: (value) {
-                      setState(() => _areaSeleccionada = value);
-                      if (value != null) {
-                        Fluttertoast.showToast(
-                          msg: 'Filtrando por: $value',
-                          toastLength: Toast.LENGTH_SHORT,
-                          gravity: ToastGravity.BOTTOM,
-                          backgroundColor: const Color(0xff1B5E20),
-                          textColor: Colors.white,
-                        );
-                      }
-                    },
-                    decoratorProps: const DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        labelText: 'Selecciona un área',
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: Color(0xff1B5E20),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _estados.map((estado) {
+                      final seleccionado = _estadoSeleccionado == estado;
+                      return ChoiceChip(
+                        label: Text(estado),
+                        selected: seleccionado,
+                        onSelected: (_) {
+                          setState(() => _estadoSeleccionado = estado);
+                          if (estado != 'Todos') {
+                            Fluttertoast.showToast(
+                              msg: 'Filtrando por: $estado',
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: const Color(0xff1B5E20),
+                              textColor: Colors.white,
+                            );
+                          }
+                        },
+                        selectedColor: const Color(0xff1B5E20),
+                        labelStyle: TextStyle(
+                          color: seleccionado
+                              ? Colors.white
+                              : const Color(0xff334155),
+                          fontWeight: FontWeight.w600,
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xff1B5E20)),
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                        ),
-                      ),
-                    ),
-                    popupProps: const PopupProps.menu(
-                      showSearchBox: true,
-                      searchFieldProps: TextFieldProps(
-                        decoration: InputDecoration(
-                          hintText: 'Buscar área...',
-                          prefixIcon: Icon(Icons.filter_list),
-                        ),
-                      ),
-                    ),
+                        avatar: estado == 'Todos'
+                            ? null
+                            : Icon(
+                                estado == 'Pendiente'
+                                    ? Icons.pending_actions
+                                    : estado == 'En progreso'
+                                    ? Icons.autorenew_rounded
+                                    : Icons.check_circle_outline_rounded,
+                                size: 18,
+                                color: seleccionado
+                                    ? Colors.white
+                                    : const Color(0xff1B5E20),
+                              ),
+                      );
+                    }).toList(),
                   ),
-                  if (_areaSeleccionada != null)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            setState(() => _areaSeleccionada = null),
-                        icon: const Icon(Icons.clear, size: 16),
-                        label: const Text('Limpiar filtro'),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -154,14 +153,20 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
                       _statusPill(
                         'Realizadas',
                         realizadas.length,
                         Colors.green,
                       ),
-                      const SizedBox(width: 10),
+                      _statusPill(
+                        'En progreso',
+                        enProgreso.length,
+                        Colors.blue,
+                      ),
                       _statusPill(
                         'Pendientes',
                         pendientes.length,
@@ -171,8 +176,8 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Aquí puedes revisar las actividades completadas y las '
-                    'que todavía están pendientes en tus áreas.',
+                    'Aquí puedes revisar las actividades completadas, en '
+                    'progreso y las que todavía están pendientes en tus áreas.',
                     style: TextStyle(color: Colors.grey, height: 1.5),
                   ),
                 ],
@@ -193,6 +198,19 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
               const SizedBox(height: 24),
             ],
 
+            // ── En progreso ───────────────────────────────────────────────────
+            if (enProgreso.isNotEmpty) ...[
+              const Text(
+                'Actividades en progreso',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 14),
+              ...enProgreso.asMap().entries.map(
+                (e) => _buildHistorialCard(e.value, e.key),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             // ── Pendientes ────────────────────────────────────────────────────
             if (pendientes.isNotEmpty) ...[
               const Text(
@@ -203,7 +221,7 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
               ...pendientes.asMap().entries.map(
                 (e) => _buildHistorialCard(e.value, e.key),
               ),
-            ] else if (realizadas.isEmpty && pendientes.isEmpty) ...[
+            ] else if (realizadas.isEmpty && enProgreso.isEmpty) ...[
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24.0),
@@ -308,7 +326,8 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
             const SizedBox(height: 14),
             LinearPercentIndicator(
               lineHeight: 10.0,
-              percent: area.progreso,
+              percent:
+                  area.progresoNormalizado, // ✅ normalizado, usando el getter
               animation: true,
               animationDuration: 800,
               progressColor: area.statusColor,

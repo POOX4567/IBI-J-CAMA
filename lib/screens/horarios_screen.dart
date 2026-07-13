@@ -4,6 +4,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart' 
     as picker;
 import 'package:intl/intl.dart'; // INTL
 import 'package:provider/provider.dart'; // PROVIDER
+
 import 'package:flutter_slidable/flutter_slidable.dart'; // FLUTTER_SLIDABLE
 import 'package:fl_chart/fl_chart.dart'; // FL_CHART
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart'; // FLUTTER_STAGGERED_GRID_VIEW
@@ -15,10 +16,12 @@ import 'package:dropdown_search/dropdown_search.dart'; // DROPDOWN_SEARCH
 import './screens_horarios/horario.dart';
 import './screens_horarios/horario_detail_screen.dart';
 import './screens_horarios/horario_provider.dart';
+import './screens_horarios/horario_form_screen.dart';
 import './screens_areas/area.dart';
 import './screens_areas/area_detail_screen.dart';
 import './screens_areas/area_provider.dart';
 import './screens_areas/area_historial_screen.dart';
+import './screens_areas/area_modal.dart';
 import '../widgets/alerta_card.dart';
 import '../widgets/horario_card.dart';
 import '../widgets/area_card.dart';
@@ -36,71 +39,26 @@ class HorariosScreen extends StatefulWidget {
 class _HorariosScreenState extends State<HorariosScreen> {
   bool mostrarHorarios = true;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Carga los horarios y empleados desde la API cuando se muestre la pantalla
+      try {
+        final provider = context.read<HorarioProvider>();
+        provider.cargarHorarios();
+        provider.cargarEmpleados();
+        final areaProvider = context.read<AreaProvider>();
+        areaProvider.cargarAreas();
+        areaProvider.cargarDatosDeFormulario();
+      } catch (_) {}
+    });
+  }
+
   // ── TABLE_CALENDAR: variables de estado ────────────────────────────────────
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
-
-  // ── Templates ─────────────────────────────────────────────────────────────
-  int _nextHorarioTemplate = 0;
-  int _nextAreaTemplate = 0;
-
-  final List<Horario> _horarioTemplates = const [
-    Horario(
-      nombre: 'Laura Ramírez',
-      turno: 'Matutino',
-      actividad: 'Revisión de cultivos',
-      fechaInicio: '12/06/2026',
-      fechaFin: '26/06/2026',
-      entrada: '07:00',
-      salida: '15:30',
-    ),
-    Horario(
-      nombre: 'Pablo Suárez',
-      turno: 'Vespertino',
-      actividad: 'Cosecha',
-      fechaInicio: '14/06/2026',
-      fechaFin: '28/06/2026',
-      entrada: '13:00',
-      salida: '21:00',
-    ),
-    Horario(
-      nombre: 'Elena Torres',
-      turno: 'Nocturno',
-      actividad: 'Monitoreo de riego',
-      fechaInicio: '16/06/2026',
-      fechaFin: '30/06/2026',
-      entrada: '22:00',
-      salida: '06:00',
-    ),
-  ];
-
-  final List<Area> _areaTemplates = [
-    Area(
-      empleado: 'Luis Herrera',
-      area: 'Invernadero C',
-      cultivo: 'Fresa',
-      actividad: 'Poda',
-      estado: 'Pendiente',
-      progreso: 0.35,
-    ),
-    Area(
-      empleado: 'Ana García',
-      area: 'Invernadero D',
-      cultivo: 'Lechuga',
-      actividad: 'Riego',
-      estado: 'Pendiente',
-      progreso: 0.25,
-    ),
-    Area(
-      empleado: 'Diego Ramírez',
-      area: 'Invernadero E',
-      cultivo: 'Hierbas',
-      actividad: 'Fertilización',
-      estado: 'Pendiente',
-      progreso: 0.15,
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -175,11 +133,15 @@ class _HorariosScreenState extends State<HorariosScreen> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      _resumenChip('Activos: ${horariosActivos.length}'),
                       _resumenChip(
-                        'Turnos: ${horariosActivos.map((h) => h.turno).toSet().length}',
+                        'Activos: ${horarioProvider.totalHorariosActivos}',
                       ),
-                      _resumenChip('Registros: ${horariosActivos.length}'),
+                      _resumenChip(
+                        'Turnos: ${horarioProvider.totalTurnosRegistrados}',
+                      ),
+                      _resumenChip(
+                        'Registros: ${horarioProvider.horarios.length}',
+                      ),
                     ],
                   ),
                 ],
@@ -187,6 +149,14 @@ class _HorariosScreenState extends State<HorariosScreen> {
             ),
             const SizedBox(height: 18),
 
+            if (horarioProvider.isLoading || areaProvider.isLoading)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: LinearProgressIndicator(
+                  color: const Color(0xff1B5E20),
+                  backgroundColor: Colors.white,
+                ),
+              ),
             // ── Toggle Horarios / Áreas ────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(6),
@@ -230,7 +200,11 @@ class _HorariosScreenState extends State<HorariosScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => setState(() => mostrarHorarios = false),
+                      onPressed: () {
+                        setState(() => mostrarHorarios = false);
+                        // Refresca las estadísticas de áreas al entrar al módulo
+                        context.read<AreaProvider>().cargarAreas();
+                      },
                       icon: const Icon(Icons.agriculture, size: 20),
                       label: const Text(
                         'Áreas',
@@ -387,8 +361,8 @@ class _HorariosScreenState extends State<HorariosScreen> {
     List<Horario> horarios,
     HorarioProvider provider,
   ) {
-    final totalRegistros = horarios.length;
-    final totalTurnos = horarios.map((h) => h.turno).toSet().length;
+    final totalRegistros = provider.horarios.length;
+    final totalTurnos = provider.totalTurnosRegistrados;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -574,22 +548,11 @@ class _HorariosScreenState extends State<HorariosScreen> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () {
-                  final template =
-                      _horarioTemplates[_nextHorarioTemplate %
-                          _horarioTemplates.length];
-                  _nextHorarioTemplate++;
-                  provider.agregarHorario(template);
-                  Fluttertoast.showToast(
-                    msg: 'Empleado "${template.nombre}" agregado',
-                    toastLength: Toast.LENGTH_SHORT,
-                    gravity: ToastGravity.BOTTOM,
-                    backgroundColor: const Color(0xff1B5E20),
-                    textColor: Colors.white,
-                  );
+                  _mostrarModalNuevoHorario(context, provider);
                 },
                 icon: const Icon(Icons.add_circle_outline, size: 20),
                 label: const Text(
-                  'Agregar nuevo empleado',
+                  'Agregar nuevo horario',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -618,7 +581,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 children: [
                   SlidableAction(
                     onPressed: (_) {
-                      provider.eliminarHorario(horario.nombre);
+                      provider.eliminarHorario(horario.id!);
                       Fluttertoast.showToast(
                         msg: '"${horario.nombre}" eliminado',
                         toastLength: Toast.LENGTH_SHORT,
@@ -779,10 +742,8 @@ class _HorariosScreenState extends State<HorariosScreen> {
         const SizedBox(height: 20),
 
         // DROPDOWN_SEARCH: búsqueda de área/responsable
-        // CÓDIGO CORREGIDO (Reemplaza el DropdownSearch viejo por este)
         DropdownSearch<String>(
           items: (filter, infiniteScrollProps) {
-            // <-- Cambiado a 'infiniteScrollProps'
             final nombres = areasList.map((a) => a.area).toList();
 
             if (filter.isEmpty) return nombres;
@@ -793,7 +754,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
           },
 
           onSelected: (value) {
-            // <-- Cambiado de 'onSelected' a 'onChanged'
             if (value != null) {
               areaProvider.setBusqueda(value);
             } else {
@@ -818,8 +778,9 @@ class _HorariosScreenState extends State<HorariosScreen> {
         const SizedBox(height: 16),
 
         // FLUTTER_STAGGERED_GRID_VIEW: resumen con grid dinámico
+        // ── Ahora usa /areas/resumen-dia en vez de calcularlo localmente ──
         StaggeredGrid.count(
-          crossAxisCount: 2,
+          crossAxisCount: 3,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           children: [
@@ -827,8 +788,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
               crossAxisCellCount: 1,
               child: _summaryCard(
                 icon: Icons.pending_actions,
-                title:
-                    '${areasList.where((a) => a.estado.toLowerCase().contains("pendiente")).length}',
+                title: '${areaProvider.pendientes}',
                 subtitle: 'Pendientes',
                 color: Colors.orange,
               ),
@@ -836,9 +796,17 @@ class _HorariosScreenState extends State<HorariosScreen> {
             StaggeredGridTile.fit(
               crossAxisCellCount: 1,
               child: _summaryCard(
+                icon: Icons.autorenew_rounded,
+                title: '${areaProvider.enProgreso}',
+                subtitle: 'En progreso',
+                color: Colors.blue,
+              ),
+            ),
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _summaryCard(
                 icon: Icons.check_circle_outline_rounded,
-                title:
-                    '${areasList.where((a) => a.estado.toLowerCase().contains("completado")).length}',
+                title: '${areaProvider.completadas}',
                 subtitle: 'Completadas',
                 color: Colors.green,
               ),
@@ -884,12 +852,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () {
-                  final template =
-                      _areaTemplates[_nextAreaTemplate % _areaTemplates.length];
-                  _nextAreaTemplate++;
-                  areaProvider.agregarArea(template);
-                },
+                onPressed: () => mostrarModalNuevaArea(context, areaProvider),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text(
                   'Añadir',
@@ -911,6 +874,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
             ],
           ),
         ),
+
         const SizedBox(height: 16),
 
         // FLUTTER_STAGGERED_GRID_VIEW: tarjetas de áreas con FLUTTER_SLIDABLE
@@ -922,13 +886,12 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 (area) => StaggeredGridTile.fit(
                   crossAxisCellCount: 1,
                   child: Slidable(
-                    key: ValueKey(area.area),
+                    key: ValueKey(area.id ?? area.area),
                     endActionPane: ActionPane(
                       motion: const DrawerMotion(),
                       children: [
                         SlidableAction(
-                          onPressed: (_) =>
-                              areaProvider.eliminarArea(area.area),
+                          onPressed: (_) => areaProvider.eliminarArea(area),
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
                           icon: Icons.delete,
@@ -1002,9 +965,11 @@ class _HorariosScreenState extends State<HorariosScreen> {
         ),
         const SizedBox(height: 24),
 
-        _buildProductividadSemanal(areasList),
+        // ── FL_CHART/PERCENT_INDICATOR: ahora con /areas/productividad-semanal ──
+        _buildProductividadSemanal(areaProvider),
         const SizedBox(height: 20),
-        _buildResumenDelDia(context, areasList),
+        // ── Resumen del día: ahora con /areas/resumen-dia ──
+        _buildResumenDelDia(context, areaProvider, areasList),
       ],
     );
   }
@@ -1121,12 +1086,34 @@ class _HorariosScreenState extends State<HorariosScreen> {
   }
 
   // ── Productividad semanal con PERCENT_INDICATOR ────────────────────────
-  Widget _buildProductividadSemanal(List<Area> areas) {
-    final cultivos = [
-      {'nombre': 'Tomate', 'valor': 0.9, 'color': Colors.green},
-      {'nombre': 'Pepino', 'valor': 0.6, 'color': Colors.orange},
-      {'nombre': 'Chile', 'valor': 0.8, 'color': Colors.blue},
-    ];
+  // Ahora consume GET /areas/productividad-semanal (agrupado por cultivo_id)
+  // en vez de datos fijos. El nombre del cultivo se resuelve contra la
+  // lista `provider.cultivos` cargada para el formulario; si aún no existe
+  // la ruta /cultivos en tu backend, se muestra "Cultivo #id" como fallback.
+  Widget _buildProductividadSemanal(AreaProvider provider) {
+    final datos = provider.productividadSemanal;
+
+    String nombreCultivo(dynamic cultivoId) {
+      final match = provider.cultivos.firstWhere(
+        (c) => '${c['id']}' == '$cultivoId',
+        orElse: () => {},
+      );
+      if (match.isNotEmpty && match['name'] != null) {
+        return match['name'];
+      }
+      return 'Cultivo #$cultivoId';
+    }
+
+    double parseProductividad(dynamic valor) {
+      if (valor is num) return valor.toDouble();
+      return double.tryParse('$valor') ?? 0.0;
+    }
+
+    Color colorPorValor(double v) {
+      if (v >= 0.75) return Colors.green;
+      if (v >= 0.5) return Colors.blue;
+      return Colors.orange;
+    }
 
     return Container(
       width: double.infinity,
@@ -1170,71 +1157,80 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Revisa el rendimiento estimado de cada cultivo.',
+            'Rendimiento promedio por cultivo, calculado en el servidor.',
             style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 20),
-          ...cultivos.map((c) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        c['nombre'] as String,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xff334155),
-                        ),
-                      ),
-                      Text(
-                        '${((c['valor'] as double) * 100).round()}%',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: c['color'] as Color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  LinearPercentIndicator(
-                    lineHeight: 10.0,
-                    percent: c['valor'] as double,
-                    animation: true,
-                    animationDuration: 900,
-                    progressColor: c['color'] as Color,
-                    backgroundColor: const Color(0xffEDF4F0),
-                    barRadius: const Radius.circular(10),
-                  ),
-                ],
+          if (datos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Text(
+                'Aún no hay datos de productividad por cultivo.',
+                style: TextStyle(color: Colors.grey),
               ),
-            );
-          }),
+            )
+          else
+            ...datos.map((item) {
+              final valor = parseProductividad(item['productividad']);
+              final color = colorPorValor(valor);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          item['cultivo_nombre'] ??
+                              'Cultivo #${item['cultivo_id']}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xff334155),
+                          ),
+                        ),
+                        Text(
+                          '${valor.round()}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearPercentIndicator(
+                      lineHeight: 10.0,
+                      percent: valor.clamp(0.0, 1.0),
+                      animation: true,
+                      animationDuration: 900,
+                      progressColor: color,
+                      backgroundColor: const Color(0xffEDF4F0),
+                      barRadius: const Radius.circular(10),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
   // ── Resumen del día ────────────────────────────────────────────────────
-  Widget _buildResumenDelDia(BuildContext context, List<Area> areas) {
-    final pendientes = areas
-        .where((a) => a.estado.toLowerCase().contains('pendiente'))
-        .length;
-    final completadas = areas
-        .where((a) => a.estado.toLowerCase().contains('completado'))
-        .length;
-    final supervision = areas
-        .where((a) => !a.estado.toLowerCase().contains('completado'))
-        .length;
-    final productividadGeneral = areas.isEmpty
-        ? 0
-        : (areas.map((a) => a.progreso).reduce((v, e) => v + e) /
-                  areas.length *
-                  100)
-              .round();
+  // Ahora usa GET /areas/resumen-dia (vía AreaProvider) en vez de calcular
+  // los totales localmente a partir de la lista filtrada de áreas.
+  Widget _buildResumenDelDia(
+    BuildContext context,
+    AreaProvider areaProvider,
+    List<Area> areasParaHistorial,
+  ) {
+    final pendientes = areaProvider.pendientes;
+    final enProgreso = areaProvider.enProgreso; // 👈 antes no se leía aquí
+    final completadas = areaProvider.completadas;
+    final totalActividades = pendientes + enProgreso + completadas;
+    final supervision = areaProvider.requierenSupervision;
+    final productividadGeneral = areaProvider.productividadGeneral.round();
 
     return Container(
       width: double.infinity,
@@ -1270,13 +1266,18 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
+            Icons.autorenew_rounded,
+            '$enProgreso actividades en progreso',
+          ),
+          const SizedBox(height: 12),
+          _buildResumenRow(
             Icons.check_circle_outline,
             '$completadas actividades completadas',
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
             Icons.warning_amber_rounded,
-            '$supervision áreas requieren supervisión',
+            '$supervision de $totalActividades actividades requieren supervisión',
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
@@ -1285,11 +1286,18 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
           const SizedBox(height: 22),
           ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
+              // Trae el historial real desde /areas/historial antes de navegar
+              await areaProvider.cargarHistorial();
+              if (!context.mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => AreaHistorialScreen(areas: areas),
+                  builder: (_) => AreaHistorialScreen(
+                    areas: areaProvider.historial.isNotEmpty
+                        ? areaProvider.historial
+                        : areasParaHistorial,
+                  ),
                 ),
               );
             },
@@ -1420,4 +1428,15 @@ class _HorariosScreenState extends State<HorariosScreen> {
       ),
     );
   }
-}
+
+  // ── NAVEGACIÓN A LA PANTALLA DE NUEVO HORARIO ────────────────────────────
+  // Ahora en vez de abrir un modal, navega a HorarioFormScreen (página aparte)
+  // en modo creación (horario: null).
+  void _mostrarModalNuevoHorario(
+    BuildContext context,
+    HorarioProvider provider,
+  ) {
+    provider.cargarEmpleados();
+    HorarioFormScreen.show(context, provider: provider);
+  }
+} // <-- CIERRE de _HorariosScreenState

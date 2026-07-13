@@ -2,6 +2,7 @@ import 'horario.dart';
 
 final List<Horario> horariosIniciales = [
   Horario(
+    empleadoId: 1,
     nombre: 'Juan Pérez',
     turno: 'Matutino',
     actividad: 'Poda',
@@ -11,6 +12,7 @@ final List<Horario> horariosIniciales = [
     salida: '16:00',
   ),
   Horario(
+    empleadoId: 2,
     nombre: 'María López',
     turno: 'Vespertino',
     actividad: 'Riego',
@@ -20,6 +22,7 @@ final List<Horario> horariosIniciales = [
     salida: '21:00',
   ),
   Horario(
+    empleadoId: 3,
     nombre: 'Carlos Gómez',
     turno: 'Nocturno',
     actividad: 'Fertilización',

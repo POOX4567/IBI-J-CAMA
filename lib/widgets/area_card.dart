@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../screens/screens_areas/area.dart';
 
+import 'package:flutter/material.dart';
+import '../screens/screens_areas/area.dart';
+
 class AreaCard extends StatelessWidget {
   final Area area;
   final VoidCallback onTap;
@@ -32,40 +35,49 @@ class AreaCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: area.statusColor.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        area.icono,
-                        color: area.statusColor,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          area.area,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: area.statusColor.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          area.cultivo,
-                          style: TextStyle(color: Colors.grey.shade700),
+                        child: Icon(
+                          area.icono,
+                          color: area.statusColor,
+                          size: 22,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              area.area,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              area.cultivo,
+                              style: TextStyle(color: Colors.grey.shade700),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -100,7 +112,7 @@ class AreaCard extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  '${(area.progreso * 100).round()}%',
+                  '${area.progreso.round()}%',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: area.statusColor,
@@ -112,7 +124,7 @@ class AreaCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: LinearProgressIndicator(
-                value: area.progreso,
+                value: area.progresoNormalizado,
                 minHeight: 10,
                 color: area.statusColor,
                 backgroundColor: Colors.grey.shade200,
