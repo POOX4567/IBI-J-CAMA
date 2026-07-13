@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart'; // TABLE_CALENDAR
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart' // FLUTTER_DATETIME_PICKER
-    as picker;
 import 'package:intl/intl.dart'; // INTL
 import 'package:provider/provider.dart'; // PROVIDER
 
@@ -22,10 +20,8 @@ import './screens_areas/area_detail_screen.dart';
 import './screens_areas/area_provider.dart';
 import './screens_areas/area_historial_screen.dart';
 import './screens_areas/area_modal.dart';
-import '../widgets/alerta_card.dart';
 import '../widgets/horario_card.dart';
 import '../widgets/area_card.dart';
-import '../widgets/notificacion_card.dart';
 import '../widgets/dashboard_stat_card.dart';
 import '../widgets/filtro_chip_widget.dart';
 
@@ -54,11 +50,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
       } catch (_) {}
     });
   }
-
-  // ── TABLE_CALENDAR: variables de estado ────────────────────────────────────
-  DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
   Widget build(BuildContext context) {
@@ -231,10 +222,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── EL CALENDARIO AHORA ABAJO DE LOS BOTONES ─────────────────────
-            _buildCalendario(),
-            const SizedBox(height: 24),
-
             // ANIMATIONS: transición suave al cambiar de módulo
             PageTransitionSwitcher(
               duration: const Duration(milliseconds: 350),
@@ -250,106 +237,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
                   : _buildAreas(context, areasActivas, areaProvider),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // ── TABLE_CALENDAR Premium Rediseñado ────────────────────────────────────
-  Widget _buildCalendario() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: TableCalendar(
-        firstDay: DateTime.utc(2020, 1, 1),
-        lastDay: DateTime.utc(2030, 12, 31),
-        focusedDay: _focusedDay,
-        calendarFormat: _calendarFormat,
-        locale: 'es_ES',
-        rowHeight: 46,
-        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-        onDaySelected: (selectedDay, focusedDay) {
-          setState(() {
-            _selectedDay = selectedDay;
-            _focusedDay = focusedDay;
-          });
-          final fechaTexto = DateFormat(
-            "EEEE d 'de' MMMM yyyy",
-            'es',
-          ).format(selectedDay);
-          Fluttertoast.showToast(
-            msg: 'Seleccionado: $fechaTexto',
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: const Color(0xff1B5E20),
-            textColor: Colors.white,
-          );
-        },
-        onFormatChanged: (format) => setState(() => _calendarFormat = format),
-        onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-        calendarStyle: const CalendarStyle(
-          outsideDaysVisible: false,
-          selectedDecoration: BoxDecoration(
-            color: Color(0xff1B5E20),
-            shape: BoxShape.circle,
-          ),
-          todayDecoration: BoxDecoration(
-            color: Color(0xffC8E6C9),
-            shape: BoxShape.circle,
-          ),
-          todayTextStyle: TextStyle(
-            color: Color(0xff1B5E20),
-            fontWeight: FontWeight.bold,
-          ),
-          defaultTextStyle: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xff334155),
-          ),
-          weekendTextStyle: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xff94A3B8),
-          ),
-        ),
-        headerStyle: const HeaderStyle(
-          titleCentered: true,
-          titleTextStyle: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xff1E293B),
-          ),
-          formatButtonDecoration: BoxDecoration(
-            color: Color(0xffE2E8F0),
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-          ),
-          formatButtonTextStyle: TextStyle(
-            color: Color(0xff475569),
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-          leftChevronIcon: Icon(Icons.chevron_left, color: Color(0xff475569)),
-          rightChevronIcon: Icon(Icons.chevron_right, color: Color(0xff475569)),
-        ),
-        daysOfWeekStyle: const DaysOfWeekStyle(
-          weekdayStyle: TextStyle(
-            color: Color(0xff64748B),
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-          weekendStyle: TextStyle(
-            color: Color(0xff94A3B8),
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
         ),
       ),
     );
@@ -507,42 +394,8 @@ class _HorariosScreenState extends State<HorariosScreen> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xffF1F5F9),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(
-                      Icons.calendar_today_rounded,
-                      color: Color(0xff1B5E20),
-                      size: 20,
-                    ),
-                    tooltip: 'Filtrar Fecha',
-                    onPressed: () {
-                      picker.DatePicker.showDatePicker(
-                        context,
-                        locale: picker.LocaleType.es,
-                        showTitleActions: true,
-                        minTime: DateTime(2020),
-                        maxTime: DateTime(2030),
-                        onConfirm: (date) {
-                          final texto = DateFormat(
-                            "d 'de' MMMM yyyy",
-                            'es',
-                          ).format(date);
-                          Fluttertoast.showToast(
-                            msg: 'Fecha filtrada: $texto',
-                            toastLength: Toast.LENGTH_SHORT,
-                            gravity: ToastGravity.BOTTOM,
-                            backgroundColor: const Color(0xff1B5E20),
-                            textColor: Colors.white,
-                          );
-                        },
-                      );
-                    },
-                  ),
+                  // ── Se quitó el botón "Filtrar Fecha": no filtraba nada,
+                  // solo mostraba un toast decorativo. ──
                 ],
               ),
               const SizedBox(height: 16),
@@ -611,69 +464,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Alertas
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Alertas del Sistema',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Color(0xff1E293B),
-                ),
-              ),
-              const SizedBox(height: 16),
-              AlertaCard(
-                color: Colors.orange,
-                icon: Icons.warning_amber_rounded,
-                texto: 'Horas extra detectadas',
-                onTap: () => _showAlerta(
-                  context,
-                  'Horas extra detectadas',
-                  'Juan Pérez registró 4 horas extra durante la semana.',
-                ),
-              ),
-              const SizedBox(height: 12),
-              AlertaCard(
-                color: Colors.red,
-                icon: Icons.error_outline_rounded,
-                texto: 'Conflicto de horarios',
-                onTap: () => _showAlerta(
-                  context,
-                  'Conflicto de horarios',
-                  'Existe un conflicto entre los horarios asignados a María López.',
-                ),
-              ),
-              const SizedBox(height: 12),
-              AlertaCard(
-                color: Colors.green,
-                icon: Icons.sync_alt_rounded,
-                texto: 'Cambio de turno pendiente',
-                onTap: () => _showAlerta(
-                  context,
-                  'Cambio de turno pendiente',
-                  'Carlos Mendoza solicitó un cambio de turno para la próxima semana.',
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -916,52 +706,6 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 ),
               )
               .toList(),
-        ),
-        const SizedBox(height: 24),
-
-        // Centro de alertas
-        const Text(
-          'Centro de Alertas de Monitoreo',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xff1E293B),
-          ),
-        ),
-        const SizedBox(height: 12),
-        NotificacionCard(
-          texto: 'Actividad atrasada detectada',
-          descripcion:
-              'Revisa el área pendiente para evitar retrasos en la cosecha.',
-          color: Colors.red,
-          icono: Icons.warning_amber_rounded,
-          onTap: () => _showAlerta(
-            context,
-            'Actividad atrasada detectada',
-            'Se ha detectado una actividad atrasada en el Invernadero A.',
-          ),
-        ),
-        NotificacionCard(
-          texto: 'Cambio de asignación realizado',
-          descripcion: 'La asignación ha sido actualizada correctamente.',
-          color: Colors.blue,
-          icono: Icons.swap_horiz,
-          onTap: () => _showAlerta(
-            context,
-            'Cambio de asignación realizado',
-            'El personal ha sido reasignado y los turnos han sido actualizados.',
-          ),
-        ),
-        NotificacionCard(
-          texto: 'Sobrecarga detectada en Área B',
-          descripcion: 'El área B tiene más tareas asignadas de las previstas.',
-          color: Colors.amber,
-          icono: Icons.error_outline,
-          onTap: () => _showAlerta(
-            context,
-            'Sobrecarga detectada en Área B',
-            'El área B tiene una asignación excesiva de tareas.',
-          ),
         ),
         const SizedBox(height: 24),
 
@@ -1418,20 +1162,9 @@ class _HorariosScreenState extends State<HorariosScreen> {
     );
   }
 
-  void _showAlerta(BuildContext context, String title, String content) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(content),
-      ),
-    );
-  }
-
   // ── NAVEGACIÓN A LA PANTALLA DE NUEVO HORARIO ────────────────────────────
-  // Ahora en vez de abrir un modal, navega a HorarioFormScreen (página aparte)
-  // en modo creación (horario: null).
+  // Abre el formulario completo como modal centrado, en modo creación
+  // (horario: null).
   void _mostrarModalNuevoHorario(
     BuildContext context,
     HorarioProvider provider,
