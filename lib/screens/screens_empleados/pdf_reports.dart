@@ -216,7 +216,7 @@ class PdfReports {
                       ...actividades.map(
                         (actividad) => pw.TableRow(
                           children: [
-                            _buildCell(actividad['titulo']),
+                            _buildCell(actividad['actividad']),
                             _buildCell(actividad['fecha']),
                             _buildCell(actividad['estado']),
                           ],

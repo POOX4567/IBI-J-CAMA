@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'screens_empleados/chat_screen.dart';
 import 'screens_empleados/empleado_detail_screen.dart';
 import 'screens_empleados/empleado.dart';
@@ -14,80 +16,139 @@ class EmpleadosScreen extends StatefulWidget {
 
 class _EmpleadosScreenState extends State<EmpleadosScreen> {
   String _selectedFilter = 'Todo el Personal';
+  List<Empleado> _empleados = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  final List<Empleado> _empleados = [
-    Empleado(
-      id: 'emp_001',
-      nombre: 'Marcus Rivera',
-      rol: 'Responsable de Invernadero',
-      zona: 'Invernadero 1',
-      estado: 'Activo',
-      turno: '06:00 AM - 02:00 PM',
-      asistencia: 'Puntual',
-      colorEstado: Colors.green,
-      fotoUrl:
-          'https://i.pinimg.com/originals/72/31/79/723179cb2148f0293eb2aaa8e08a3daa.jpg',
-      telefono: '+521234567890', // 👈 Número de teléfono
-    ),
-    Empleado(
-      id: 'emp_002',
-      nombre: 'Elena Vance',
-      rol: 'Responsable de Invernadero',
-      zona: 'Invernadero 2',
-      estado: 'Descanso',
-      turno: '02:00 PM - 10:00 PM',
-      asistencia: 'Programado',
-      colorEstado: Colors.orange,
-      fotoUrl:
-          'https://tse1.mm.bing.net/th/id/OIP.dK-loEFvTG6Cdm9CjU42wAHaLG?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
-      telefono: '+521234567891',
-    ),
-    Empleado(
-      id: 'emp_003',
-      nombre: 'Carlos Mendoza',
-      rol: 'Responsable de Invernadero',
-      zona: 'Invernadero 1',
-      estado: 'Activo',
-      turno: '06:00 AM - 02:00 PM',
-      asistencia: 'Puntual',
-      colorEstado: Colors.green,
-      fotoUrl:
-          'https://i.pinimg.com/736x/1d/20/e0/1d20e072722e22dd56f17a51d7809561.jpg',
-      telefono: '+521234567892',
-    ),
-    Empleado(
-      id: 'emp_004',
-      nombre: 'Laura Fernández',
-      rol: 'Responsable de Invernadero',
-      zona: 'Invernadero 2',
-      estado: 'Activo',
-      turno: '02:00 PM - 10:00 PM',
-      asistencia: 'Puntual',
-      colorEstado: Colors.green,
-      fotoUrl:
-          'https://i.pinimg.com/originals/e3/9c/da/e39cda0fdd790c019cdb02723178c524.jpg',
-      telefono: '+521234567893',
-    ),
-    Empleado(
-      id: 'emp_005',
-      nombre: 'Roberto Sánchez',
-      rol: 'Responsable de Invernadero',
-      zona: 'Invernadero 1',
-      estado: 'Descanso',
-      turno: '06:00 AM - 02:00 PM',
-      asistencia: 'Programado',
-      colorEstado: Colors.orange,
-      fotoUrl:
-          'https://booker-kult.s3.amazonaws.com/library/1137/20210510_165004145_M.JPG',
-      telefono: '+521234567894',
-    ),
-  ];
-
-  // Fecha actual formateada con intl
   String get _fechaActual {
     final now = DateTime.now();
     final formatter = DateFormat('EEEE, d \'de\' MMMM \'de\' yyyy', 'es');
     return formatter.format(now);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarEmpleados();
+  }
+
+  Future<void> _cargarEmpleados() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 1. Obtener empleados
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/employees'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> empleadosData = data['data'];
+          final List<Empleado> empleados = empleadosData
+              .map((json) => Empleado.fromJson(json))
+              .toList();
+
+          // 2. Obtener asistencia para cada empleado
+          for (var empleado in empleados) {
+            await _cargarAsistencia(empleado);
+          }
+
+          setState(() {
+            _empleados = empleados;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _errorMessage = data['message'] ?? 'Error al cargar empleados';
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'Error ${response.statusCode}: ${response.body}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error al conectar con el servidor: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Función para cargar asistencia de un empleado
+  Future<void> _cargarAsistencia(Empleado empleado) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/attendance/${empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          final asistenciaData = data['data'] ?? {};
+          // Asignar valores al empleado
+          empleado.asistencia = asistenciaData['status'] ?? 'No registrado';
+          empleado.horaEntrada = asistenciaData['check_in'] ?? '';
+          empleado.horaSalida = asistenciaData['check_out'] ?? '';
+          empleado.fechaAsistencia = asistenciaData['date'] ?? '';
+        }
+      }
+    } catch (e) {
+      // Si falla la asistencia, dejar valores por defecto
+      empleado.asistencia = 'No registrado';
+    }
+  }
+
+  // Obtener texto de asistencia formateado
+  String _getAsistenciaText(Empleado empleado) {
+    if (empleado.asistencia == null || empleado.asistencia!.isEmpty) {
+      return 'No registrado';
+    }
+    switch (empleado.asistencia!.toLowerCase()) {
+      case 'presente':
+        return 'Puntual';
+      case 'retardo':
+        return 'Retardo';
+      case 'falta':
+        return 'Falta';
+      case 'justificado':
+        return 'Justificado';
+      default:
+        return empleado.asistencia!;
+    }
+  }
+
+  // Obtener color de asistencia
+  Color _getAsistenciaColor(Empleado empleado) {
+    if (empleado.asistencia == null || empleado.asistencia!.isEmpty) {
+      return Colors.grey;
+    }
+    switch (empleado.asistencia!.toLowerCase()) {
+      case 'presente':
+        return Colors.green;
+      case 'retardo':
+        return Colors.orange;
+      case 'falta':
+        return Colors.red;
+      case 'justificado':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
   }
 
   List<Empleado> get _empleadosFiltrados {
@@ -101,8 +162,16 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     return _empleados;
   }
 
-  // Función para hacer llamada
   Future<void> _hacerLlamada(String numero) async {
+    if (numero.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay número de teléfono disponible'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     final Uri telUri = Uri(scheme: 'tel', path: numero);
     if (await canLaunchUrl(telUri)) {
       await launchUrl(telUri);
@@ -121,7 +190,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Header con estadísticas y fecha
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -144,19 +212,18 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _fechaActual, // 👈 Fecha formateada con intl
+                  _fechaActual,
                   style: const TextStyle(fontSize: 12, color: Colors.white70),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Administrando ${_empleados.length} especialistas de invernadero en 2 zonas',
+                  'Administrando ${_empleados.length} especialistas de invernadero',
                   style: const TextStyle(fontSize: 14, color: Colors.white70),
                 ),
               ],
             ),
           ),
 
-          // Filtros con scroll horizontal
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -183,16 +250,58 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             ),
           ),
 
-          // Lista de empleados
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _empleadosFiltrados.length,
-              itemBuilder: (context, index) {
-                final empleado = _empleadosFiltrados[index];
-                return _buildEmpleadoCard(empleado);
-              },
-            ),
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+                  )
+                : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red.shade300,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF5D4037),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _cargarEmpleados,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E7D32),
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _empleados.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No hay empleados registrados',
+                      style: TextStyle(fontSize: 16, color: Color(0xFF5D4037)),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _empleadosFiltrados.length,
+                    itemBuilder: (context, index) {
+                      final empleado = _empleadosFiltrados[index];
+                      return _buildEmpleadoCard(empleado);
+                    },
+                  ),
           ),
         ],
       ),
@@ -223,6 +332,9 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   }
 
   Widget _buildEmpleadoCard(Empleado empleado) {
+    final asistenciaText = _getAsistenciaText(empleado);
+    final asistenciaColor = _getAsistenciaColor(empleado);
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -250,10 +362,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Foto de perfil + Nombre y estado
                 Row(
                   children: [
-                    // Foto de perfil con mejor manejo
                     ClipOval(
                       child: Image.network(
                         empleado.fotoUrl,
@@ -299,7 +409,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    // Nombre y estado
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,27 +422,54 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: empleado.colorEstado.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: empleado.colorEstado,
-                                width: 1,
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: empleado.colorEstado.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: empleado.colorEstado,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  empleado.estado,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: empleado.colorEstado,
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              empleado.estado,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: empleado.colorEstado,
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: asistenciaColor.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: asistenciaColor,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  asistenciaText,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: asistenciaColor,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -342,7 +478,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Rol
                 Text(
                   empleado.rol,
                   style: const TextStyle(
@@ -352,7 +487,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   ),
                 ),
 
-                // Zona
                 Text(
                   empleado.zona,
                   style: const TextStyle(
@@ -363,7 +497,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
                 const Divider(height: 24, thickness: 1),
 
-                // Turno actual
                 Row(
                   children: [
                     const Icon(
@@ -395,7 +528,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Asistencia
                 Row(
                   children: [
                     const Icon(
@@ -414,13 +546,27 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        empleado.asistencia,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            asistenciaText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: asistenciaColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (empleado.horaEntrada != null &&
+                              empleado.horaEntrada!.isNotEmpty)
+                            Text(
+                              'Entrada: ${empleado.horaEntrada}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF5D4037),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -428,10 +574,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
                 const SizedBox(height: 16),
 
-                // Botones: Mensaje y Llamada (uno al lado del otro)
                 Row(
                   children: [
-                    // Botón Mensaje (ocupa la mitad)
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
@@ -459,7 +603,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Botón Llamada (ocupa la otra mitad)
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
