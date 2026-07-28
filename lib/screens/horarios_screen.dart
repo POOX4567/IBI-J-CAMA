@@ -58,8 +58,14 @@ class _HorariosScreenState extends State<HorariosScreen> {
     final areaProvider = context.watch<AreaProvider>();
     final horariosActivos = horarioProvider.horarios;
     final areasActivas = areaProvider.areas;
+    // PROVIDER: lee los horarios y áreas del estado global
+    final horarioProvider = context.watch<HorarioProvider>();
+    final areaProvider = context.watch<AreaProvider>();
+    final horariosActivos = horarioProvider.horarios;
+    final areasActivas = areaProvider.areas;
 
     return Scaffold(
+      backgroundColor: const Color(0xffF8FAFC),
       backgroundColor: const Color(0xffF8FAFC),
       appBar: AppBar(
         elevation: 0,
@@ -71,34 +77,47 @@ class _HorariosScreenState extends State<HorariosScreen> {
             color: Colors.white,
             fontSize: 20,
           ),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            fontSize: 20,
+          ),
         ),
         centerTitle: false,
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Resumen rápido ─────────────────────────────────────────────
             // ── Resumen rápido ─────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xff1B5E20), Color(0xff2E7D32)],
+                  colors: [Color(0xff1B5E20), Color(0xff2E7D32)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xff1B5E20).withValues(alpha: 0.25),
+                    color: const Color(0xff1B5E20).withValues(alpha: 0.25),
                     blurRadius: 20,
+                    offset: const Offset(0, 8),
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
@@ -109,9 +128,18 @@ class _HorariosScreenState extends State<HorariosScreen> {
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
                     ),
+                    'RESUMEN OPERATIVO',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                   const SizedBox(height: 6),
+                  const SizedBox(height: 6),
                   const Text(
+                    'Horarios y Áreas Activas',
                     'Horarios y Áreas Activas',
                     style: TextStyle(
                       color: Colors.white,
@@ -154,10 +182,13 @@ class _HorariosScreenState extends State<HorariosScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 16,
+                    offset: const Offset(0, 6),
                     offset: const Offset(0, 6),
                   ),
                 ],
@@ -172,22 +203,33 @@ class _HorariosScreenState extends State<HorariosScreen> {
                         'Horarios',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
+                      onPressed: () => setState(() => mostrarHorarios = true),
+                      icon: const Icon(Icons.schedule_outlined, size: 20),
+                      label: const Text(
+                        'Horarios',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: mostrarHorarios
                             ? const Color(0xff1B5E20)
                             : Colors.transparent,
+                            : Colors.transparent,
                         foregroundColor: mostrarHorarios
                             ? Colors.white
                             : const Color(0xff64748B),
+                            : const Color(0xff64748B),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shadowColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
                   const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
@@ -206,12 +248,16 @@ class _HorariosScreenState extends State<HorariosScreen> {
                         backgroundColor: !mostrarHorarios
                             ? const Color(0xff1B5E20)
                             : Colors.transparent,
+                            : Colors.transparent,
                         foregroundColor: !mostrarHorarios
                             ? Colors.white
                             : const Color(0xff64748B),
+                            : const Color(0xff64748B),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shadowColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
@@ -256,9 +302,16 @@ class _HorariosScreenState extends State<HorariosScreen> {
       children: [
         // Stats
         Row(
+        // Stats
+        Row(
           children: [
             Expanded(
+            Expanded(
               child: DashboardStatCard(
+                valor: '$totalRegistros',
+                titulo: 'Horarios activos',
+                icono: Icons.schedule_outlined,
+                color: const Color(0xff2E7D32),
                 valor: '$totalRegistros',
                 titulo: 'Horarios activos',
                 icono: Icons.schedule_outlined,
@@ -267,19 +320,25 @@ class _HorariosScreenState extends State<HorariosScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
+            const SizedBox(width: 10),
+            Expanded(
               child: DashboardStatCard(
                 valor: '$totalRegistros',
                 titulo: 'Empleados',
                 icono: Icons.people,
                 color: const Color(0xff1565C0),
+                color: const Color(0xff1565C0),
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
             const SizedBox(width: 10),
             Expanded(
               child: DashboardStatCard(
                 valor: '$totalTurnos',
                 titulo: 'Turnos',
                 icono: Icons.calendar_month,
+                color: const Color(0xffF57C00),
                 color: const Color(0xffF57C00),
               ),
             ),
@@ -292,13 +351,23 @@ class _HorariosScreenState extends State<HorariosScreen> {
         const SizedBox(height: 20),
 
         // PROVIDER: filtros que actualizan la lista en tiempo real
+
+        // FL_CHART: gráfica de horas trabajadas por turno
+        _buildGraficaTurnos(horarios),
+        const SizedBox(height: 20),
+
+        // PROVIDER: filtros que actualizan la lista en tiempo real
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
                 color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
@@ -315,9 +384,34 @@ class _HorariosScreenState extends State<HorariosScreen> {
                   fontSize: 16,
                   color: Color(0xff1E293B),
                 ),
+                'Filtros por Turno',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xff1E293B),
+                ),
               ),
               const SizedBox(height: 14),
+              const SizedBox(height: 14),
               Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: ['Todos', 'Matutino', 'Vespertino', 'Nocturno']
+                    .map(
+                      (turno) => FiltroChipWidget(
+                        texto: turno,
+                        seleccionado: provider.filtroTurno == turno,
+                        onTap: () => provider.setFiltroTurno(turno),
+                        icon: turno == 'Todos'
+                            ? Icons.grid_view
+                            : turno == 'Matutino'
+                            ? Icons.wb_sunny
+                            : turno == 'Vespertino'
+                            ? Icons.nights_stay
+                            : Icons.bedtime,
+                      ),
+                    )
+                    .toList(),
                 spacing: 8,
                 runSpacing: 8,
                 children: ['Todos', 'Matutino', 'Vespertino', 'Nocturno']
@@ -343,7 +437,10 @@ class _HorariosScreenState extends State<HorariosScreen> {
         const SizedBox(height: 20),
 
         // ── TABLA DE EMPLEADOS (Rediseño visual integrado) ───────────────────
+
+        // ── TABLA DE EMPLEADOS (Rediseño visual integrado) ───────────────────
         Container(
+          padding: const EdgeInsets.all(20),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -351,11 +448,13 @@ class _HorariosScreenState extends State<HorariosScreen> {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
+          child: Column(
           child: Column(
             children: [
               Row(
@@ -476,18 +575,27 @@ class _HorariosScreenState extends State<HorariosScreen> {
     List<Area> areasList,
     AreaProvider areaProvider,
   ) {
+  // ── MÓDULO ÁREAS ──────────────────────────────────────────────────────────
+  Widget _buildAreas(
+    BuildContext context,
+    List<Area> areasList,
+    AreaProvider areaProvider,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Header
         // Header
         Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xff2E7D32), Color(0xff43A047)],
+              colors: [Color(0xff2E7D32), Color(0xff43A047)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
+            borderRadius: BorderRadius.circular(24),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Row(
@@ -495,11 +603,17 @@ class _HorariosScreenState extends State<HorariosScreen> {
               Container(
                 width: 60,
                 height: 60,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
+                  Icons.grid_view_rounded,
+                  size: 30,
                   Icons.grid_view_rounded,
                   size: 30,
                   color: Colors.white,
@@ -507,20 +621,26 @@ class _HorariosScreenState extends State<HorariosScreen> {
               ),
               const SizedBox(width: 16),
               const Expanded(
+              const SizedBox(width: 16),
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   children: [
                     Text(
                       'Asignación de Áreas',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       'Supervisión inteligente agrícola',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
                       style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ],
@@ -865,10 +985,13 @@ class _HorariosScreenState extends State<HorariosScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 18,
+            offset: const Offset(0, 8),
             offset: const Offset(0, 8),
           ),
         ],
@@ -883,6 +1006,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xffE8F5E9),
                   borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.bar_chart, color: Color(0xff1B5E20)),
               ),
@@ -895,10 +1019,17 @@ class _HorariosScreenState extends State<HorariosScreen> {
                     fontWeight: FontWeight.bold,
                     color: Color(0xff1E293B),
                   ),
+                  'Productividad Semanal',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff1E293B),
+                  ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
           const SizedBox(height: 12),
           const Text(
             'Rendimiento promedio por cultivo, calculado en el servidor.',
@@ -982,12 +1113,17 @@ class _HorariosScreenState extends State<HorariosScreen> {
       decoration: BoxDecoration(
         color: const Color(0xffE8F5E9),
         borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
+          const Row(
             children: [
+              Icon(
+                Icons.dashboard_customize_outlined,
+                color: Color(0xff1B5E20),
               Icon(
                 Icons.dashboard_customize_outlined,
                 color: Color(0xff1B5E20),
@@ -999,10 +1135,18 @@ class _HorariosScreenState extends State<HorariosScreen> {
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Color(0xff1B5E20),
+              SizedBox(width: 12),
+              Text(
+                'Resumen del Día',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xff1B5E20),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 20),
           const SizedBox(height: 20),
           _buildResumenRow(
             Icons.pending_actions,
@@ -1025,6 +1169,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
+            Icons.moving_rounded,
             Icons.moving_rounded,
             'Productividad general: $productividadGeneral%',
           ),
@@ -1050,12 +1195,21 @@ class _HorariosScreenState extends State<HorariosScreen> {
               'Reporte Completo de Actividades',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
+            icon: const Icon(Icons.history_toggle_off_rounded, size: 20),
+            label: const Text(
+              'Reporte Completo de Actividades',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xff1B5E20),
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(52),
               elevation: 0,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(52),
+              elevation: 0,
               shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -1070,8 +1224,10 @@ class _HorariosScreenState extends State<HorariosScreen> {
       children: [
         Container(
           padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: const Color(0xff1B5E20)),
@@ -1085,9 +1241,32 @@ class _HorariosScreenState extends State<HorariosScreen> {
               fontWeight: FontWeight.w600,
               color: Color(0xff2E7D32),
             ),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xff2E7D32),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _resumenChip(String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        texto,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
@@ -1120,10 +1299,13 @@ class _HorariosScreenState extends State<HorariosScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 18,
+            offset: const Offset(0, 8),
             offset: const Offset(0, 8),
           ),
         ],
@@ -1133,12 +1315,17 @@ class _HorariosScreenState extends State<HorariosScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: 22),
           ),
+          const SizedBox(height: 14),
           const SizedBox(height: 14),
           Text(
             title,
@@ -1149,8 +1336,20 @@ class _HorariosScreenState extends State<HorariosScreen> {
             ),
           ),
           const SizedBox(height: 4),
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff1E293B),
+            ),
+          ),
+          const SizedBox(height: 4),
           Text(
             subtitle,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
             style: const TextStyle(
               color: Colors.grey,
               fontSize: 13,

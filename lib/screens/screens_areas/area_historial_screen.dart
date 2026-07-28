@@ -50,6 +50,9 @@ class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
         .where((a) => a.estado.toLowerCase().contains('completado'))
         .toList();
 
+    // Obtener la lista de nombres únicos de áreas para el buscador
+    final nombresAreas = widget.areas.map((a) => a.area).toSet().toList();
+
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
       appBar: AppBar(
