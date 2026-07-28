@@ -58,7 +58,7 @@ void mostrarModalNuevaArea(BuildContext context, AreaProvider provider) {
               cultivo: cultivoSeleccionado!['name'],
               actividad: actividadTexto.trim(),
               estado: estadoSeleccionado,
-              // 👇 CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
+              //  CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
               progreso: (progreso * 100).round().toDouble(),
             );
 

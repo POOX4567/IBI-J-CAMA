@@ -13,7 +13,7 @@ class AreaHistorialScreen extends StatefulWidget {
 }
 
 class _AreaHistorialScreenState extends State<AreaHistorialScreen> {
-  // 👇 Filtro por ESTADO (antes era por nombre de área).
+  //  Filtro por ESTADO (antes era por nombre de área).
   // 'Todos' muestra las tres categorías; cualquier otro valor filtra
   // exclusivamente por ese estado.
   static const List<String> _estados = [

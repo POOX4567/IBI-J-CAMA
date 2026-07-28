@@ -236,7 +236,7 @@ class AreaProvider extends ChangeNotifier {
   }
 
   // ── DELETE /areas/{id} ───────────────────────────────────────────
-  // 👇 Ahora recibe el objeto Area completo y borra por `id`, no por
+  //  Ahora recibe el objeto Area completo y borra por `id`, no por
   // nombre. Buscar por nombre (`a.area == areaName`) siempre encontraba
   // la PRIMERA área con ese nombre en la lista, sin importar cuál
   // tarjeta deslizó el usuario, por eso siempre borraba "la de arriba".
@@ -279,7 +279,7 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
-  /// ⚠️ Requiere que exista GET /cultivos en Laravel. Mientras no exista,
+  ///  Requiere que exista GET /cultivos en Laravel. Mientras no exista,
   /// esto fallará en silencio (capturado aquí) y se usará el fallback de
   /// _actualizarCultivosDesdeProductividad().
   Future<void> cargarCultivosDisponibles() async {

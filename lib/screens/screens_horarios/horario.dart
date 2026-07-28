@@ -47,7 +47,7 @@ class Horario {
 
   /// Convierte la respuesta JSON del backend Laravel a un Horario
   factory Horario.fromJson(Map<String, dynamic> json) {
-    // 👇 el nombre puede venir anidado en 'empleado' con la llave 'name'
+    //  el nombre puede venir anidado en 'empleado' con la llave 'name'
     // o 'nombre' según el endpoint; probamos ambas antes de rendirnos.
     String nombreResuelto = 'Sin nombre';
     final empleado = json['empleado'];
