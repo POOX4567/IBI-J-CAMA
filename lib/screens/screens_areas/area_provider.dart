@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'area.dart';
 import 'area_service.dart';
@@ -14,6 +15,12 @@ class AreaProvider extends ChangeNotifier {
   String _busqueda = '';
   bool isLoading = false;
   String? error;
+
+  // ── Bandera para saber si YA intentamos cargar los datos del
+  // formulario al menos una vez (evita reintentos infinitos y permite
+  // que la UI sepa cuándo mostrar el loader). ─────────────────────────
+  bool cargandoDatosFormulario = false;
+  bool datosFormularioCargados = false;
 
   // ── resumen-dia ──────────────────────────────────────────────────
   int? _pendientes;
@@ -57,9 +64,6 @@ class AreaProvider extends ChangeNotifier {
       _areas.where((a) => a.estado.toLowerCase().contains('completado')).length;
 
   // ── Conteo de áreas "En progreso" ─────────────────────────────────
-  // Ahora /areas/resumen-dia SÍ regresa este dato (actividades_en_progreso).
-  // Si por alguna razón no llegara (backend viejo, error de red, etc.),
-  // se calcula igual que pendientes/completadas: contando la lista local.
   int get enProgreso =>
       _enProgresoBackend ??
       _areas.where((a) => a.estado.toLowerCase().contains('progreso')).length;
@@ -95,6 +99,7 @@ class AreaProvider extends ChangeNotifier {
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
+      _log('cargarAreas', e);
     }
     isLoading = false;
     notifyListeners();
@@ -117,6 +122,7 @@ class AreaProvider extends ChangeNotifier {
       _actualizarCultivosDesdeProductividad();
     } catch (e) {
       error = e.toString();
+      _log('cargarEstadisticas', e);
     }
     notifyListeners();
   }
@@ -147,6 +153,7 @@ class AreaProvider extends ChangeNotifier {
       _historial = await _service.obtenerHistorial();
     } catch (e) {
       error = e.toString();
+      _log('cargarHistorial', e);
     }
     isLoading = false;
     notifyListeners();
@@ -161,6 +168,7 @@ class AreaProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       error = e.toString();
+      _log('agregarArea', e);
       notifyListeners();
       return false;
     }
@@ -200,6 +208,7 @@ class AreaProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       error = e.toString();
+      _log('actualizarArea', e);
       notifyListeners();
       return false;
     }
@@ -215,6 +224,7 @@ class AreaProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       error = e.toString();
+      _log('actualizarProgreso', e);
       notifyListeners();
       return false;
     }
@@ -230,20 +240,15 @@ class AreaProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       error = e.toString();
+      _log('actualizarEstado', e);
       notifyListeners();
       return false;
     }
   }
 
   // ── DELETE /areas/{id} ───────────────────────────────────────────
-  //  Ahora recibe el objeto Area completo y borra por `id`, no por
-  // nombre. Buscar por nombre (`a.area == areaName`) siempre encontraba
-  // la PRIMERA área con ese nombre en la lista, sin importar cuál
-  // tarjeta deslizó el usuario, por eso siempre borraba "la de arriba".
   Future<void> eliminarArea(Area area) async {
     if (area.id == null) {
-      // Área sin id (creada localmente sin respuesta del server, caso raro):
-      // se elimina por identidad de objeto, no por nombre.
       _areas.removeWhere((a) => identical(a, area));
       notifyListeners();
       return;
@@ -254,6 +259,7 @@ class AreaProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       error = e.toString();
+      _log('eliminarArea', e);
       notifyListeners();
     }
   }
@@ -261,41 +267,73 @@ class AreaProvider extends ChangeNotifier {
   // ── Dropdowns del formulario "Nueva Área" ────────────────────────
   Future<void> cargarEmpleadosDisponibles() async {
     try {
-      empleados = await _service.obtenerEmpleados();
+      final data = await _service.obtenerEmpleados();
+      empleados = data;
+      // Log de diagnóstico: si el backend respondió pero la lista viene
+      // vacía, lo verás en consola en vez de asumir que "no cargó".
+      _log('cargarEmpleadosDisponibles', 'OK -> ${empleados.length} empleados');
       notifyListeners();
     } catch (e) {
       error = 'No se pudieron cargar empleados: $e';
+      _log('cargarEmpleadosDisponibles', e);
       notifyListeners();
     }
   }
 
   Future<void> cargarAreasDisponiblesParaFormulario() async {
     try {
-      areasDisponibles = await _service.obtenerInvernaderos();
+      final data = await _service.obtenerInvernaderos();
+      areasDisponibles = data;
+      _log(
+        'cargarAreasDisponiblesParaFormulario',
+        'OK -> ${areasDisponibles.length} áreas',
+      );
       notifyListeners();
     } catch (e) {
       error = 'No se pudieron cargar áreas: $e';
+      _log('cargarAreasDisponiblesParaFormulario', e);
       notifyListeners();
     }
   }
 
-  ///  Requiere que exista GET /cultivos en Laravel. Mientras no exista,
-  /// esto fallará en silencio (capturado aquí) y se usará el fallback de
-  /// _actualizarCultivosDesdeProductividad().
   Future<void> cargarCultivosDisponibles() async {
     try {
-      cultivos = await _service.obtenerCultivos();
+      final data = await _service.obtenerCultivos();
+      cultivos = data;
+      _log('cargarCultivosDisponibles', 'OK -> ${cultivos.length} cultivos');
       notifyListeners();
     } catch (e) {
       error = 'No se pudieron cargar cultivos (falta ruta /cultivos): $e';
+      _log('cargarCultivosDisponibles', e);
       notifyListeners();
     }
   }
 
-  Future<void> cargarDatosDeFormulario() async {
+  /// Carga empleados + áreas (+ intenta cultivos) en paralelo.
+  /// Ahora expone `cargandoDatosFormulario` para que la UI (el modal)
+  /// pueda mostrar un loader mientras espera, en vez de abrirse con
+  /// los dropdowns vacíos.
+  Future<void> cargarDatosDeFormulario({bool forzar = false}) async {
+    if (cargandoDatosFormulario) return;
+    if (datosFormularioCargados && !forzar) return;
+
+    cargandoDatosFormulario = true;
+    notifyListeners();
+
     await Future.wait([
       cargarEmpleadosDisponibles(),
       cargarAreasDisponiblesParaFormulario(),
+      cargarCultivosDisponibles(),
     ]);
+
+    cargandoDatosFormulario = false;
+    datosFormularioCargados = true;
+    notifyListeners();
+  }
+
+  void _log(String metodo, Object mensaje) {
+    if (kDebugMode) {
+      debugPrint('[AreaProvider] $metodo -> $mensaje');
+    }
   }
 }

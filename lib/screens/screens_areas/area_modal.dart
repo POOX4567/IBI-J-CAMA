@@ -12,12 +12,49 @@ import 'area_provider.dart';
 ///
 ///   mostrarModalNuevaArea(context, areaProvider);
 ///
-/// Antes de llamarlo, asegúrate de haber cargado los datos del
-/// formulario al menos una vez, por ejemplo en initState:
-///
-///   areaProvider.cargarDatosDeFormulario();
-///
-void mostrarModalNuevaArea(BuildContext context, AreaProvider provider) {
+/// 👇 CAMBIO IMPORTANTE: ya NO es necesario (ni recomendable) llamar
+/// `areaProvider.cargarDatosDeFormulario()` manualmente antes de abrir
+/// el modal. Esta función ahora se asegura, ella misma, de que los
+/// datos de empleados/áreas/cultivos estén cargados ANTES de construir
+/// el formulario. Si aún no lo están, muestra un loader breve mientras
+/// llegan de la API, en vez de abrir el modal con los dropdowns vacíos
+/// (que era la causa de que "no cargaran los empleados").
+Future<void> mostrarModalNuevaArea(
+  BuildContext context,
+  AreaProvider provider,
+) async {
+  // ── Aseguramos los datos del formulario ANTES de construir el diálogo ──
+  if (!provider.datosFormularioCargados) {
+    // Mini-loader mientras llegan los datos de la API.
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    await provider.cargarDatosDeFormulario();
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // cierra el loader
+    }
+
+    if (provider.empleados.isEmpty && provider.error != null) {
+      // Avisamos si, aun así, no llegaron datos (backend caído, ruta
+      // incorrecta, etc.) en vez de abrir un formulario inservible.
+      if (context.mounted) {
+        Fluttertoast.showToast(
+          msg:
+              provider.error ??
+              'No se pudieron cargar los datos del formulario',
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
+  }
+
+  if (!context.mounted) return;
+
   Map<String, dynamic>? empleadoSeleccionado;
   Map<String, dynamic>? areaSeleccionada; // antes "invernaderoSeleccionado"
   Map<String, dynamic>? cultivoSeleccionado;
@@ -58,7 +95,7 @@ void mostrarModalNuevaArea(BuildContext context, AreaProvider provider) {
               cultivo: cultivoSeleccionado!['name'],
               actividad: actividadTexto.trim(),
               estado: estadoSeleccionado,
-              //  CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
+              // CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
               progreso: (progreso * 100).round().toDouble(),
             );
 
@@ -126,38 +163,77 @@ void mostrarModalNuevaArea(BuildContext context, AreaProvider provider) {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.empleados;
-                      return provider.empleados
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: empleadoSeleccionado,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar empleado',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  if (provider.empleados.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No hay empleados disponibles. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider.cargarEmpleadosDisponibles();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.empleados;
+                        return provider.empleados
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: empleadoSeleccionado,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar empleado',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => empleadoSeleccionado = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => empleadoSeleccionado = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── ÁREA (antes "Invernadero") ───────────────
@@ -390,11 +466,29 @@ void mostrarModalNuevaArea(BuildContext context, AreaProvider provider) {
 ///
 ///   mostrarModalEditarArea(context, areaProvider, area);
 ///
-void mostrarModalEditarArea(
+/// 👇 Mismo cambio que en `mostrarModalNuevaArea`: se asegura de que los
+/// datos de los dropdowns estén cargados antes de construir el formulario.
+Future<void> mostrarModalEditarArea(
   BuildContext context,
   AreaProvider provider,
   Area area,
-) {
+) async {
+  if (!provider.datosFormularioCargados) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    await provider.cargarDatosDeFormulario();
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  if (!context.mounted) return;
+
   // Intentamos preseleccionar el item exacto de cada lista del provider
   // (por id). Si el provider aún no cargó esa lista, usamos un mapa
   // "sintético" armado con los datos que ya trae el Area, para que al
@@ -467,7 +561,7 @@ void mostrarModalEditarArea(
               cultivo: cultivoSeleccionado!['name'],
               actividad: actividadCtrl.text.trim(),
               estado: estadoSeleccionado,
-              // 👇 CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
+              // CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
               progreso: (progreso * 100).round().toDouble(),
             );
 

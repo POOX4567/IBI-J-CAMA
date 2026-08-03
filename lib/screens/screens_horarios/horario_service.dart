@@ -4,8 +4,6 @@ import 'package:http/http.dart' as http;
 import 'horario.dart';
 
 class HorarioService {
-  // Permite sobreescribir la URL en tiempo de compilación:
-  // `flutter run --dart-define=API_BASE_URL=http://192.168.100.148:8000/api`
   static final String _envBase = const String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
@@ -13,13 +11,13 @@ class HorarioService {
 
   static String get baseUrl {
     if (_envBase.isNotEmpty) return _envBase;
-    if (kIsWeb) return 'http://127.0.0.1:8000/api';
+    if (kIsWeb) return 'https://ibijicama.utptics.com/api';
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://192.168.100.148:8000/api';
+        return 'https://ibijicama.utptics.com/api';
       default:
-        return 'http://192.168.100.148:8000/api';
+        return 'https://ibijicama.utptics.com/api';
     }
   }
 

@@ -7,7 +7,7 @@ import 'area.dart';
 
 class AreaService {
   // Permite sobreescribir la URL en tiempo de compilación:
-  // `flutter run --dart-define=API_BASE_URL=http://192.168.100.148:8000/api`
+  // `flutter run --dart-define=API_BASE_URL=http://192.168.100.209:8000/api`
   static final String _envBase = const String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
@@ -15,13 +15,15 @@ class AreaService {
 
   static String get baseUrl {
     if (_envBase.isNotEmpty) return _envBase;
-    if (kIsWeb) return 'http://127.0.0.1:8000/api';
+    if (kIsWeb) return 'https://ibijicama.utptics.com/api';
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://192.168.100.148:8000/api';
+        // 👇 FIX: faltaba el puerto ":8000". Sin él, la petición iba al
+        // puerto 80 (HTTP default), donde Laravel no está escuchando.
+        return 'https://ibijicama.utptics.com/api';
       default:
-        return 'http://192.168.100.148:8000/api';
+        return 'https://ibijicama.utptics.com/api';
     }
   }
 

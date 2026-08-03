@@ -59,6 +59,10 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
   TimeOfDay? _horaSalida;
   bool _guardando = false;
 
+  // ── NUEVO: estado propio para saber si la carga de empleados falló ──────
+  bool _cargandoEmpleados = false;
+  String? _errorEmpleados;
+
   final _turnos = const ['Matutino', 'Vespertino', 'Nocturno'];
 
   @override
@@ -81,8 +85,34 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
 
     // Asegura que el dropdown de empleados tenga datos frescos
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<HorarioProvider>().cargarEmpleados();
+      if (mounted) _cargarEmpleados();
     });
+  }
+
+  // ── NUEVO: carga los empleados y captura/expone cualquier error ────────
+  Future<void> _cargarEmpleados() async {
+    setState(() {
+      _cargandoEmpleados = true;
+      _errorEmpleados = null;
+    });
+    try {
+      final provider = context.read<HorarioProvider>();
+      await provider.cargarEmpleados();
+      // Si el provider guardó un error internamente durante la carga,
+      // lo mostramos aquí en vez de dejarlo oculto.
+      if (provider.error != null && provider.empleados.isEmpty) {
+        _errorEmpleados = provider.error;
+      } else if (provider.empleados.isEmpty) {
+        _errorEmpleados =
+            'El servidor respondió correctamente pero no devolvió ningún '
+            'empleado. Verifica el endpoint "/employees" en el backend.';
+      }
+    } catch (e) {
+      _errorEmpleados = 'No se pudo conectar con el servidor: $e';
+    }
+    if (mounted) {
+      setState(() => _cargandoEmpleados = false);
+    }
   }
 
   // ── Parsers robustos para precargar datos existentes ────────────────────
@@ -302,6 +332,67 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // ── NUEVO: aviso visible si falló la carga de
+                      // empleados, en vez de quedar en silencio ──────────
+                      if (_cargandoEmpleados)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 14),
+                          child: LinearProgressIndicator(
+                            color: Color(0xff1B5E20),
+                          ),
+                        ),
+                      if (!_cargandoEmpleados && _errorEmpleados != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffFDECEA),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'No se pudieron cargar los empleados',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _errorEmpleados!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _cargarEmpleados,
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Reintentar'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       // ── Dropdown de empleado ─────────────────────────
                       DropdownButtonFormField<int>(
                         value: _empleadoId,
