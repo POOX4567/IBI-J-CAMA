@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:badges/badges.dart' as badges;
+import 'package:intl/intl.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class AlertasScreen extends StatefulWidget {
   const AlertasScreen({super.key});
@@ -8,7 +11,31 @@ class AlertasScreen extends StatefulWidget {
 }
 
 class _AlertasScreenState extends State<AlertasScreen> {
+
+final fechaActual =
+    DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+
+    String estadoConexion = 'Verificando...';
+
+    Future<void> verificarConexion() async {
+  final resultado = await Connectivity().checkConnectivity();
+
+  setState(() {
+    if (resultado.contains(ConnectivityResult.none)) {
+      estadoConexion = 'Sin conexión';
+    } else {
+      estadoConexion = 'Conectado';
+    }
+  });
+}
+
   bool _marcadasLeidas = false;
+
+  @override
+void initState() {
+  super.initState();
+  verificarConexion();
+}
 
   static const Color primaryGreen = Color(0xFF2E7D32);
   static const Color lightGreen = Color(0xFF66BB6A);
@@ -17,6 +44,8 @@ class _AlertasScreenState extends State<AlertasScreen> {
   static const Color warning = Color(0xFFF57C00);
   static const Color critical = Color(0xFFD32F2F);
   static const Color infoBlue = Color(0xFF1976D2);
+
+  
 
   @override
   Widget build(BuildContext context) {
@@ -27,12 +56,14 @@ class _AlertasScreenState extends State<AlertasScreen> {
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 90),
           children: [
             _Header(
-              onMarkRead: () {
-                setState(() {
-                  _marcadasLeidas = true;
-                });
-              },
-            ),
+                fechaActual: fechaActual,
+  estadoConexion: estadoConexion,
+  onMarkRead: () {
+    setState(() {
+      _marcadasLeidas = true;
+    });
+  },
+),
 
             const SizedBox(height: 16),
 
@@ -200,8 +231,14 @@ class _AlertasScreenState extends State<AlertasScreen> {
 
 class _Header extends StatelessWidget {
   final VoidCallback onMarkRead;
+   final String fechaActual;
+   final String estadoConexion;
 
-  const _Header({required this.onMarkRead});
+  const _Header({
+    required this.onMarkRead,
+     required this.fechaActual,
+     required this.estadoConexion,
+    });
 
   @override
   Widget build(BuildContext context) {
@@ -222,24 +259,64 @@ class _Header extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Centro de\nAlertas',
-            style: TextStyle(
-              fontSize: 29,
-              height: 1.25,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Monitoreando avisos importantes del sistema',
-            style: TextStyle(
-              fontSize: 17,
-              height: 1.4,
-              color: Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+  'Centro de\nAlertas',
+  style: TextStyle(
+    fontSize: 29,
+    height: 1.25,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  ),
+),
+
+const SizedBox(height: 12),
+
+badges.Badge(
+  badgeContent: const Text(
+    '7',
+    style: TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      fontSize: 11,
+    ),
+  ),
+  child: const Text(
+    'Alertas pendientes',
+    style: TextStyle(
+      color: Colors.white,
+      fontSize: 16,
+      fontWeight: FontWeight.w500,
+    ),
+  ),
+),
+
+const SizedBox(height: 14),
+
+const Text(
+  'Monitoreando avisos importantes del sistema',
+  style: TextStyle(
+    fontSize: 17,
+    height: 1.4,
+    color: Colors.white70,
+    fontWeight: FontWeight.w500,
+  ),
+),
+const SizedBox(height: 6),
+
+Text(
+  'Última actualización: $fechaActual',
+  
+  style: const TextStyle(
+    fontSize: 14,
+    color: Colors.white70,
+  ),
+),
+Text(
+  'Estado de red: $estadoConexion',
+  style: const TextStyle(
+    fontSize: 14,
+    color: Colors.white70,
+  ),
+),
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,

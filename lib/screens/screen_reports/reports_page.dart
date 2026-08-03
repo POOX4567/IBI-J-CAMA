@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'production_report_page.dart';
 import 'attendance_report_page.dart';
 import 'maintenance_report_page.dart';
-import 'greenhouse_report_page.dart';
 import 'incidents_report_page.dart';
 import 'activities_report_page.dart';
 
@@ -78,13 +77,7 @@ class _ReportsPageState extends State<ReportsPage> {
         subtitle: "Equipos y reparaciones",
         page: const MaintenanceReportPage(),
       ),
-      _ReportItem(
-        icon: Icons.spa,
-        color: Colors.purple,
-        title: "Invernaderos",
-        subtitle: "Comparación de métricas",
-        page: const GreenhouseReportPage(),
-      ),
+
       _ReportItem(
         icon: Icons.warning,
         color: Colors.red,

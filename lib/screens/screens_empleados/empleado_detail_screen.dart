@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'empleado.dart';
 import 'pdf_reports.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class EmpleadoDetailScreen extends StatefulWidget {
   final Empleado empleado;
@@ -28,22 +29,34 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
   List<dynamic> _actividades = [];
   List<dynamic> _observaciones = [];
 
+  final storage = const FlutterSecureStorage();
+
+  // Base URL de la API en la nube
+  static const String _baseUrl = 'https://ibijicama.utptics.com/api';
+
   @override
   void initState() {
     super.initState();
     _cargarDatosEmpleado();
   }
 
+  Future<String?> _getToken() async {
+    return await storage.read(key: 'token');
+  }
+
   Future<void> _cargarDatosEmpleado() async {
     setState(() => _isLoading = true);
 
     try {
+      final token = await _getToken();
+
       // 1. Obtener datos del empleado
       final empleadoResponse = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/employees/${widget.empleado.id}'),
+        Uri.parse('$_baseUrl/employees/${widget.empleado.id}'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
       );
 
@@ -77,35 +90,47 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     }
   }
 
-  // ==== ASISTENCIAS ====
+  // ============================================================
+  // ASISTENCIAS
+  // ============================================================
   Future<void> _cargarAsistencias() async {
-    final asistenciaResponse = await http.get(
-      Uri.parse('http://127.0.0.1:8000/api/attendance/${widget.empleado.id}'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    );
+    try {
+      final token = await _getToken();
 
-    if (asistenciaResponse.statusCode == 200) {
-      final Map<String, dynamic> asistenciaData = json.decode(
-        asistenciaResponse.body,
+      final asistenciaResponse = await http.get(
+        Uri.parse('$_baseUrl/attendance/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-      if (asistenciaData['success'] == true) {
-        setState(() {
-          _asistencias = asistenciaData['data'] ?? [];
-        });
+
+      if (asistenciaResponse.statusCode == 200) {
+        final Map<String, dynamic> asistenciaData = json.decode(
+          asistenciaResponse.body,
+        );
+        if (asistenciaData['success'] == true) {
+          setState(() {
+            _asistencias = asistenciaData['data'] ?? [];
+          });
+        }
       }
+    } catch (e) {
+      print('Error al cargar asistencias: $e');
     }
   }
 
   Future<void> _registrarAsistencia(String tipo) async {
     try {
+      final token = await _getToken();
+
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/attendance'),
+        Uri.parse('$_baseUrl/attendance'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
         body: json.encode({'user_id': widget.empleado.id, 'type': tipo}),
       );
@@ -170,35 +195,47 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  // ==== ACTIVIDADES ====
+  // ============================================================
+  // ACTIVIDADES
+  // ============================================================
   Future<void> _cargarActividades() async {
-    final actividadesResponse = await http.get(
-      Uri.parse('http://127.0.0.1:8000/api/activities/${widget.empleado.id}'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    );
+    try {
+      final token = await _getToken();
 
-    if (actividadesResponse.statusCode == 200) {
-      final Map<String, dynamic> actividadesData = json.decode(
-        actividadesResponse.body,
+      final actividadesResponse = await http.get(
+        Uri.parse('$_baseUrl/activities/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-      if (actividadesData['success'] == true) {
-        setState(() {
-          _actividades = actividadesData['data'] ?? [];
-        });
+
+      if (actividadesResponse.statusCode == 200) {
+        final Map<String, dynamic> actividadesData = json.decode(
+          actividadesResponse.body,
+        );
+        if (actividadesData['success'] == true) {
+          setState(() {
+            _actividades = actividadesData['data'] ?? [];
+          });
+        }
       }
+    } catch (e) {
+      print('Error al cargar actividades: $e');
     }
   }
 
   Future<void> _registrarActividad(String actividad, String descripcion) async {
     try {
+      final token = await _getToken();
+
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/activities'),
+        Uri.parse('$_baseUrl/activities'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
         body: json.encode({
           'user_id': widget.empleado.id,
@@ -296,35 +333,47 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  // ==== OBSERVACIONES ====
+  // ============================================================
+  // OBSERVACIONES
+  // ============================================================
   Future<void> _cargarObservaciones() async {
-    final observacionesResponse = await http.get(
-      Uri.parse('http://127.0.0.1:8000/api/observations/${widget.empleado.id}'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    );
+    try {
+      final token = await _getToken();
 
-    if (observacionesResponse.statusCode == 200) {
-      final Map<String, dynamic> observacionesData = json.decode(
-        observacionesResponse.body,
+      final observacionesResponse = await http.get(
+        Uri.parse('$_baseUrl/observations/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-      if (observacionesData['success'] == true) {
-        setState(() {
-          _observaciones = observacionesData['data'] ?? [];
-        });
+
+      if (observacionesResponse.statusCode == 200) {
+        final Map<String, dynamic> observacionesData = json.decode(
+          observacionesResponse.body,
+        );
+        if (observacionesData['success'] == true) {
+          setState(() {
+            _observaciones = observacionesData['data'] ?? [];
+          });
+        }
       }
+    } catch (e) {
+      print('Error al cargar observaciones: $e');
     }
   }
 
   Future<void> _registrarObservacion(String texto) async {
     try {
+      final token = await _getToken();
+
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/observations'),
+        Uri.parse('$_baseUrl/observations'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
         body: json.encode({
           'user_id': widget.empleado.id,
@@ -357,11 +406,14 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
 
   Future<void> _editarObservacion(int id, String nuevoTexto) async {
     try {
+      final token = await _getToken();
+
       final response = await http.put(
-        Uri.parse('http://127.0.0.1:8000/api/observations/$id'),
+        Uri.parse('$_baseUrl/observations/$id'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
         body: json.encode({'observation': nuevoTexto}),
       );
@@ -483,7 +535,9 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  // ==== ESTADÍSTICAS ====
+  // ============================================================
+  // ESTADÍSTICAS
+  // ============================================================
   Map<String, dynamic> _getEstadisticasAsistencia() {
     int entradas = 0;
     int salidas = 0;

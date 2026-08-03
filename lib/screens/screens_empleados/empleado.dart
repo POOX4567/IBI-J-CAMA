@@ -4,11 +4,13 @@ class Empleado {
   final int id;
   final String nombre;
   final String correo;
+  final String telefono;
   final String? fotografia;
   final String cargo;
   final String turno;
-  final String invernadero;
+  final List<Map<String, dynamic>> invernaderos;
   final String estadoLaboral;
+
   // Campos de asistencia (se llenan después)
   String? asistencia;
   String? horaEntrada;
@@ -19,10 +21,11 @@ class Empleado {
     required this.id,
     required this.nombre,
     required this.correo,
+    required this.telefono,
     this.fotografia,
     required this.cargo,
     required this.turno,
-    required this.invernadero,
+    required this.invernaderos,
     required this.estadoLaboral,
     this.asistencia,
     this.horaEntrada,
@@ -36,12 +39,22 @@ class Empleado {
       id: json['id'] ?? 0,
       nombre: json['nombre'] ?? 'Sin nombre',
       correo: json['correo'] ?? '',
-      fotografia: json['fotografia'],
-      cargo: json['cargo'] ?? 'Responsable de Invernadero',
+      telefono: json['telephone'] ?? '',
+      fotografia: json['imagen'], // La API devuelve "imagen"
+      cargo: json['rol'] ?? 'Sin rol', // La API devuelve "rol"
       turno: json['turno'] ?? 'No especificado',
-      invernadero: json['invernadero'] ?? 'Sin invernadero',
+      invernaderos: List<Map<String, dynamic>>.from(json['invernaderos'] ?? []),
       estadoLaboral: json['estado_laboral'] ?? 'Activo',
     );
+  }
+
+  /// Devuelve todos los nombres de los invernaderos separados por coma
+  String get invernadero {
+    if (invernaderos.isEmpty) {
+      return 'Sin invernadero';
+    }
+
+    return invernaderos.map((e) => e['nombre'].toString()).join(', ');
   }
 
   // Propiedades derivadas para la UI
@@ -49,6 +62,7 @@ class Empleado {
     if (fotografia != null && fotografia!.isNotEmpty) {
       return fotografia!;
     }
+
     return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(nombre)}&background=2E7D32&color=fff&size=128';
   }
 
@@ -78,7 +92,7 @@ class Empleado {
     }
   }
 
-  String get rol => cargo.isNotEmpty ? cargo : 'Responsable de Invernadero';
+  String get rol => cargo.isNotEmpty ? cargo : 'Sin rol';
+
   String get zona => invernadero;
-  String get telefono => ''; // Si no viene de la API
 }

@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'screens_empleados/chat_screen.dart';
 import 'screens_empleados/empleado_detail_screen.dart';
 import 'screens_empleados/empleado.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class EmpleadosScreen extends StatefulWidget {
   const EmpleadosScreen({super.key});
@@ -17,14 +18,9 @@ class EmpleadosScreen extends StatefulWidget {
 class _EmpleadosScreenState extends State<EmpleadosScreen> {
   String _selectedFilter = 'Todo el Personal';
   List<Empleado> _empleados = [];
+  List<String> _invernaderosUnicos = [];
   bool _isLoading = true;
   String? _errorMessage;
-
-  String get _fechaActual {
-    final now = DateTime.now();
-    final formatter = DateFormat('EEEE, d \'de\' MMMM \'de\' yyyy', 'es');
-    return formatter.format(now);
-  }
 
   @override
   void initState() {
@@ -39,14 +35,20 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     });
 
     try {
-      // 1. Obtener empleados
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
       final response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/employees'),
+        Uri.parse('https://ibijicama.utptics.com/api/employees'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         },
       );
+
+      print('STATUS: ${response.statusCode}');
+      print('BODY: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
@@ -56,10 +58,14 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               .map((json) => Empleado.fromJson(json))
               .toList();
 
-          // 2. Obtener asistencia para cada empleado
+          // Obtener lista única de invernaderos para filtros
+          Set<String> invernaderosSet = {};
           for (var empleado in empleados) {
-            await _cargarAsistencia(empleado);
+            for (var inv in empleado.invernaderos) {
+              invernaderosSet.add(inv['nombre'].toString());
+            }
           }
+          _invernaderosUnicos = invernaderosSet.toList();
 
           setState(() {
             _empleados = empleados;
@@ -85,81 +91,27 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     }
   }
 
-  // Función para cargar asistencia de un empleado
-  Future<void> _cargarAsistencia(Empleado empleado) async {
-    try {
-      final response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/attendance/${empleado.id}'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        if (data['success'] == true) {
-          final asistenciaData = data['data'] ?? {};
-          // Asignar valores al empleado
-          empleado.asistencia = asistenciaData['status'] ?? 'No registrado';
-          empleado.horaEntrada = asistenciaData['check_in'] ?? '';
-          empleado.horaSalida = asistenciaData['check_out'] ?? '';
-          empleado.fechaAsistencia = asistenciaData['date'] ?? '';
-        }
-      }
-    } catch (e) {
-      // Si falla la asistencia, dejar valores por defecto
-      empleado.asistencia = 'No registrado';
-    }
-  }
-
-  // Obtener texto de asistencia formateado
-  String _getAsistenciaText(Empleado empleado) {
-    if (empleado.asistencia == null || empleado.asistencia!.isEmpty) {
-      return 'No registrado';
-    }
-    switch (empleado.asistencia!.toLowerCase()) {
-      case 'presente':
-        return 'Puntual';
-      case 'retardo':
-        return 'Retardo';
-      case 'falta':
-        return 'Falta';
-      case 'justificado':
-        return 'Justificado';
-      default:
-        return empleado.asistencia!;
-    }
-  }
-
-  // Obtener color de asistencia
-  Color _getAsistenciaColor(Empleado empleado) {
-    if (empleado.asistencia == null || empleado.asistencia!.isEmpty) {
-      return Colors.grey;
-    }
-    switch (empleado.asistencia!.toLowerCase()) {
-      case 'presente':
-        return Colors.green;
-      case 'retardo':
-        return Colors.orange;
-      case 'falta':
-        return Colors.red;
-      case 'justificado':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
+  // Fecha actual formateada con intl
+  String get _fechaActual {
+    final now = DateTime.now();
+    final formatter = DateFormat('EEEE, d \'de\' MMMM \'de\' yyyy', 'es');
+    return formatter.format(now);
   }
 
   List<Empleado> get _empleadosFiltrados {
     if (_selectedFilter == 'Todo el Personal') {
       return _empleados;
-    } else if (_selectedFilter == 'Invernadero 1') {
-      return _empleados.where((e) => e.zona == 'Invernadero 1').toList();
-    } else if (_selectedFilter == 'Invernadero 2') {
-      return _empleados.where((e) => e.zona == 'Invernadero 2').toList();
+    } else {
+      // Filtrar por invernadero seleccionado
+      return _empleados.where((e) {
+        for (var inv in e.invernaderos) {
+          if (inv['nombre']?.toString() == _selectedFilter) {
+            return true;
+          }
+        }
+        return false;
+      }).toList();
     }
-    return _empleados;
   }
 
   Future<void> _hacerLlamada(String numero) async {
@@ -224,6 +176,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             ),
           ),
 
+          // Filtros dinámicos con scroll horizontal
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -242,9 +195,12 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 children: [
                   _buildFilterChip('Todo el Personal'),
                   const SizedBox(width: 12),
-                  _buildFilterChip('Invernadero 1'),
-                  const SizedBox(width: 12),
-                  _buildFilterChip('Invernadero 2'),
+                  ..._invernaderosUnicos.map((invernadero) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _buildFilterChip(invernadero),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -332,8 +288,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   }
 
   Widget _buildEmpleadoCard(Empleado empleado) {
-    final asistenciaText = _getAsistenciaText(empleado);
-    final asistenciaColor = _getAsistenciaColor(empleado);
+    // Obtener lista de invernaderos del empleado
+    String invernaderosTexto = empleado.invernaderos.isEmpty
+        ? 'Sin invernadero'
+        : empleado.invernaderos.map((e) => e['nombre'].toString()).join(', ');
 
     return GestureDetector(
       onTap: () {
@@ -422,54 +380,27 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: empleado.colorEstado.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: empleado.colorEstado,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  empleado.estado,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: empleado.colorEstado,
-                                  ),
-                                ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: empleado.colorEstado.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: empleado.colorEstado,
+                                width: 1,
                               ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: asistenciaColor.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: asistenciaColor,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  asistenciaText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: asistenciaColor,
-                                  ),
-                                ),
+                            ),
+                            child: Text(
+                              empleado.estado,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: empleado.colorEstado,
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -478,6 +409,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // Rol
                 Text(
                   empleado.rol,
                   style: const TextStyle(
@@ -487,8 +419,9 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   ),
                 ),
 
+                // Invernaderos
                 Text(
-                  empleado.zona,
+                  invernaderosTexto,
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF81C784),
@@ -497,6 +430,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
                 const Divider(height: 24, thickness: 1),
 
+                // Turno actual
                 Row(
                   children: [
                     const Icon(
@@ -506,7 +440,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     ),
                     const SizedBox(width: 8),
                     const Text(
-                      'TURNO ACTUAL:',
+                      'TURNO:',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -528,16 +462,13 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 12),
 
+                // Teléfono
                 Row(
                   children: [
-                    const Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: Color(0xFF5D4037),
-                    ),
+                    const Icon(Icons.phone, size: 16, color: Color(0xFF5D4037)),
                     const SizedBox(width: 8),
                     const Text(
-                      'ASISTENCIA:',
+                      'TELÉFONO:',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -546,27 +477,15 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            asistenciaText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: asistenciaColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (empleado.horaEntrada != null &&
-                              empleado.horaEntrada!.isNotEmpty)
-                            Text(
-                              'Entrada: ${empleado.horaEntrada}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF5D4037),
-                              ),
-                            ),
-                        ],
+                      child: Text(
+                        empleado.telefono.isNotEmpty
+                            ? empleado.telefono
+                            : 'No registrado',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -586,6 +505,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                                 nombre: empleado.nombre,
                                 rol: empleado.rol,
                                 fotoUrl: empleado.fotoUrl,
+                                empleadoId:
+                                    empleado.id, // 👈 Nuevo campo requerido
                               ),
                             ),
                           );
