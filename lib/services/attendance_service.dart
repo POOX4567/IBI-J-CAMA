@@ -1,100 +1,96 @@
-import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'package:ibi/models/attendance_model.dart';
 
 class AttendanceService {
-  static const String baseUrl = 'https://ibijicama.utptics.com/api';
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-
-  Future<String?> _getToken() async {
-    return await _storage.read(key: 'token');
-  }
-
-  // Método principal que consume la API real
+  // Simulación de consulta a la API / MongoDB
   Future<AttendanceReportData> fetchAttendanceReport() async {
-    final token = await _getToken();
+    // Simulamos 1 segundo de latencia de red
+    await Future.delayed(const Duration(seconds: 1));
 
-    final headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
+    // Datos crudos simulando la respuesta JSON de tu backend
+    final List<Map<String, dynamic>> rawEmployees = [
+      {"name": "Juan Pérez", "status": "Presente", "puntualidad": "100%"},
+      {"name": "Carlos López", "status": "Ausente", "puntualidad": "70%"},
+      {"name": "María Gómez", "status": "Tarde", "puntualidad": "85%"},
+      {"name": "Ana Torres", "status": "Presente", "puntualidad": "98%"},
+      {"name": "Luis Hernández", "status": "Presente", "puntualidad": "95%"},
+      {"name": "Sofía Ramírez", "status": "Ausente", "puntualidad": "75%"},
+    ];
 
-    try {
-      // 1. Petición para obtener la lista de empleados
-      final employeesResponse = await http.get(
-        Uri.parse('$baseUrl/employees'),
-        headers: headers,
-      );
+    final List<Map<String, dynamic>> rawAsistencias = [
+      {
+        'dia': 'LUN',
+        'fecha': '20',
+        'mes': 'MAY',
+        'estado': 'Presente',
+        'hora': '06:00 AM',
+      },
+      {
+        'dia': 'MAR',
+        'fecha': '21',
+        'mes': 'MAY',
+        'estado': 'Presente',
+        'hora': '06:05 AM',
+      },
+      {
+        'dia': 'MIÉ',
+        'fecha': '22',
+        'mes': 'MAY',
+        'estado': 'Retardo',
+        'hora': '06:20 AM',
+      },
+      {
+        'dia': 'JUE',
+        'fecha': '23',
+        'mes': 'MAY',
+        'estado': 'Presente',
+        'hora': '06:02 AM',
+      },
+      {
+        'dia': 'VIE',
+        'fecha': '24',
+        'mes': 'MAY',
+        'estado': 'Falta',
+        'hora': '--',
+      },
+      {
+        'dia': 'SÁB',
+        'fecha': '25',
+        'mes': 'MAY',
+        'estado': 'Presente',
+        'hora': '06:00 AM',
+      },
+    ];
 
-      List<EmployeeAttendanceModel> employees = [];
-      if (employeesResponse.statusCode == 200) {
-        final Map<String, dynamic> body = jsonDecode(employeesResponse.body);
-        if (body['success'] == true && body['data'] != null) {
-          final List<dynamic> data = body['data'];
-          employees = data.map((e) {
-            return EmployeeAttendanceModel.fromMap({
-              'name': e['name'] ?? e['nombre'] ?? 'Sin nombre',
-              'status': e['status'] ?? e['estado'] ?? 'Presente',
-              'puntualidad': e['puntualidad'] ?? '100%',
-            });
-          }).toList();
-        }
-      }
+    final List<Map<String, dynamic>> rawObservaciones = [
+      {
+        'fecha': '20/05/2026',
+        'texto':
+            'Excelente trabajo en la inspección de humedad. Muy detallado.',
+        'autor': 'Sup. Juan',
+      },
+      {
+        'fecha': '18/05/2026',
+        'texto': 'Recordar llegar puntual al turno matutino.',
+        'autor': 'Sup. Juan',
+      },
+    ];
 
-      // 2. Petición para obtener registros de asistencia recientes
-      final attendanceResponse = await http.get(
-        Uri.parse('$baseUrl/attendance'),
-        headers: headers,
-      );
+    // Mapeo e instanciación transformando los mapas a Modelos de Dart
+    final employees = rawEmployees
+        .map((e) => EmployeeAttendanceModel.fromMap(e))
+        .toList();
+    final recentAttendance = rawAsistencias
+        .map((a) => RecentAttendanceModel.fromMap(a))
+        .toList();
+    final observations = rawObservaciones
+        .map((o) => SupervisorObservationModel.fromMap(o))
+        .toList();
 
-      List<RecentAttendanceModel> recentAttendance = [];
-      if (attendanceResponse.statusCode == 200) {
-        final Map<String, dynamic> body = jsonDecode(attendanceResponse.body);
-        if (body['success'] == true && body['data'] != null) {
-          final List<dynamic> data = body['data'];
-          recentAttendance = data.map((a) {
-            return RecentAttendanceModel.fromMap({
-              'dia': a['dia'] ?? 'LUN',
-              'fecha': a['fecha'] ?? '',
-              'mes': a['mes'] ?? '',
-              'estado': a['type'] ?? a['estado'] ?? 'Presente',
-              'hora': a['hora'] ?? a['date_time'] ?? '--',
-            });
-          }).toList();
-        }
-      }
-
-      // 3. Petición para obtener observaciones de supervisores
-      final observationsResponse = await http.get(
-        Uri.parse('$baseUrl/observations'),
-        headers: headers,
-      );
-
-      List<SupervisorObservationModel> observations = [];
-      if (observationsResponse.statusCode == 200) {
-        final Map<String, dynamic> body = jsonDecode(observationsResponse.body);
-        if (body['success'] == true && body['data'] != null) {
-          final List<dynamic> data = body['data'];
-          observations = data.map((o) {
-            return SupervisorObservationModel.fromMap({
-              'fecha': o['created_at'] ?? o['fecha'] ?? '',
-              'texto': o['observation'] ?? o['texto'] ?? '',
-              'autor': o['author'] ?? o['autor'] ?? 'Supervisor',
-            });
-          }).toList();
-        }
-      }
-
-      // Retornamos el objeto unificado
-      return AttendanceReportData(
-        employees: employees,
-        recentAttendance: recentAttendance,
-        observations: observations,
-      );
-    } catch (e) {
-      throw Exception('Error al conectar con el servidor de asistencias: $e');
-    }
+    return AttendanceReportData(
+      employees: employees,
+      recentAttendance: recentAttendance,
+      observations: observations,
+    );
   }
 }

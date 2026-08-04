@@ -8,7 +8,7 @@ import '../../widgets/widgets_dashboard/common_widgets.dart';
 // Arquitectura de Providers
 import '../../services/resumen_provider.dart';
 
-// ⚡ IMPORTACIONES ABSOLUTAS CON RUTAS DEL PAQUETE (Sin errores de rutas relativas)
+// Rutas de las Pantallas de Reportes
 import 'package:ibi/screens/screen_reports/activities_report_page.dart';
 import 'package:ibi/screens/screen_reports/attendance_report_page.dart';
 import 'package:ibi/screens/screen_reports/incidents_report_page.dart';
@@ -18,9 +18,40 @@ import 'package:ibi/screens/screen_reports/production_report_page.dart';
 class ResumenPage extends StatelessWidget {
   const ResumenPage({super.key});
 
+  /// Diálogo dinámico para desplegar la información devuelta por los endpoints
+  void _mostrarDetalles(BuildContext context, String titulo, String mensaje) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            titulo,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(mensaje),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "Entendido",
+                style: TextStyle(
+                  color: Color(0xFF1B5E20),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Escuchamos de manera reactiva el proveedor de datos
+    // Escuchamos de manera reactiva el proveedor que realiza los http.get a la API
     final resumenData = context.watch<ResumenProvider>();
 
     final inv = resumenData.tarjetasPrincipales['invernaderos'];
@@ -28,10 +59,14 @@ class ResumenPage extends StatelessWidget {
     final ale = resumenData.tarjetasPrincipales['alertas'];
     final mant = resumenData.tarjetasPrincipales['mantenimiento'];
 
-    // Manejo de estado seguro en caso de que los datos aún no hayan inicializado
-    if (inv == null || emp == null || ale == null || mant == null) {
+    // Manejo de estado seguro mientras el Provider procesa las llamadas asíncronas
+    if (resumenData.isLoading ||
+        inv == null ||
+        emp == null ||
+        ale == null ||
+        mant == null) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF0D47A1)),
+        child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
       );
     }
 
@@ -51,7 +86,7 @@ class ResumenPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // 1. Grid de Métricas Principales
+          // 1. Grid de Métricas Principales conectadas a la API
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -60,57 +95,77 @@ class ResumenPage extends StatelessWidget {
             mainAxisSpacing: 15,
             childAspectRatio: 1,
             children: [
+              // Invernaderos
               InfoCard(
                 title: inv.titulo,
                 value: inv.valor,
                 subtitle: inv.subtitulo,
                 icon: Icons.eco,
                 color: Colors.green,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProductionReportPage(),
-                  ),
-                ),
+                onTap: () {
+                  if (inv.detalleAlerta.isNotEmpty) {
+                    _mostrarDetalles(context, inv.titulo, inv.detalleAlerta);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ProductionReportPage(),
+                      ),
+                    );
+                  }
+                },
               ),
+              // Empleados (Conexión /api/employees)
               InfoCard(
                 title: emp.titulo,
                 value: emp.valor,
                 subtitle: emp.subtitulo,
                 icon: Icons.people,
                 color: Colors.blue,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AttendanceReportPage(),
-                  ),
-                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AttendanceReportPage(),
+                    ),
+                  );
+                },
               ),
+              // Alertas (Conexión /api/incidents)
               InfoCard(
                 title: ale.titulo,
                 value: ale.valor,
                 subtitle: ale.subtitulo,
                 icon: Icons.warning,
                 color: Colors.red,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const IncidentsReportPage(),
-                  ),
-                ),
+                onTap: () {
+                  if (ale.detalleAlerta.isNotEmpty) {
+                    _mostrarDetalles(context, ale.titulo, ale.detalleAlerta);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const IncidentsReportPage(),
+                      ),
+                    );
+                  }
+                },
               ),
+              // Mantenimiento (Conexión /api/mantenimiento)
               InfoCard(
                 title: mant.titulo,
                 value: mant.valor,
                 subtitle: mant.subtitulo,
                 icon: Icons.build,
                 color: Colors.orange,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MaintenanceReportPage(),
-                  ),
-                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MaintenanceReportPage(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -124,16 +179,18 @@ class ResumenPage extends StatelessWidget {
               (alerta) => AlertCard(
                 title: alerta.titulo,
                 subtitle: alerta.subtitulo,
-                color: alerta.titulo.contains("Temperatura")
+                color:
+                    alerta.titulo.contains("Temperatura") ||
+                        alerta.detalleAlerta.contains("Alta")
                     ? Colors.red
-                    : (alerta.titulo.contains("Riego")
+                    : (alerta.titulo.contains("Riego") ||
+                              alerta.detalleAlerta.contains("Media")
                           ? Colors.orange
                           : Colors.blue),
-                onTap: () => Navigator.push(
+                onTap: () => _mostrarDetalles(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const IncidentsReportPage(),
-                  ),
+                  alerta.titulo,
+                  alerta.detalleAlerta,
                 ),
               ),
             ),
@@ -169,7 +226,7 @@ class ResumenPage extends StatelessWidget {
             const SizedBox(height: 30),
           ],
 
-          // 4. Historial Reciente mapeado dinámicamente
+          // 4. Historial Reciente mapeado dinámicamente desde el backend
           if (resumenData.actividadReciente.isNotEmpty) ...[
             const SectionTitle(title: "Actividad Reciente"),
             const SizedBox(height: 15),
@@ -187,11 +244,10 @@ class ResumenPage extends StatelessWidget {
                     : (actividad.titulo.contains("Riego")
                           ? Colors.cyan
                           : Colors.green),
-                onTap: () => Navigator.push(
+                onTap: () => _mostrarDetalles(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const ActivitiesReportPage(),
-                  ),
+                  actividad.titulo,
+                  actividad.detalleAlerta,
                 ),
               ),
             ),
