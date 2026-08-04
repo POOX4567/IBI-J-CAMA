@@ -211,7 +211,10 @@ class _TechnicalSupervisionScreenState
                         const SupervisionFailureChart(),
                         const SizedBox(height: 12),
 
-                        const SupervisionPerformance(),
+                        SupervisionPerformance(
+                          sensores: _sensores,
+                          elementos: _elementos,
+                        ),
                         const SizedBox(height: 12),
 
                         const SupervisionHistory(),
