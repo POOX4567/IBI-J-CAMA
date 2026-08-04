@@ -310,9 +310,9 @@ class AreaProvider extends ChangeNotifier {
   }
 
   /// Carga empleados + áreas (+ intenta cultivos) en paralelo.
-  /// Ahora expone `cargandoDatosFormulario` para que la UI (el modal)
-  /// pueda mostrar un loader mientras espera, en vez de abrirse con
-  /// los dropdowns vacíos.
+  /// Expone `cargandoDatosFormulario` para que la UI (el modal) pueda
+  /// mostrar un loader mientras espera, en vez de abrirse con los
+  /// dropdowns vacíos.
   Future<void> cargarDatosDeFormulario({bool forzar = false}) async {
     if (cargandoDatosFormulario) return;
     if (datosFormularioCargados && !forzar) return;

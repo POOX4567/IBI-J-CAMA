@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart'; // HIVE: almacenamiento local offline
 
 class Area {
   final int? id;
@@ -8,20 +7,10 @@ class Area {
   final int? cultivoId;
 
   final String empleado;
-
-  @HiveField(1)
   final String area;
-
-  @HiveField(2)
   final String cultivo;
-
-  @HiveField(3)
   final String actividad;
-
-  @HiveField(4)
   final String estado;
-
-  @HiveField(5)
   final double progreso;
 
   Area({

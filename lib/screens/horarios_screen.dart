@@ -39,15 +39,25 @@ class _HorariosScreenState extends State<HorariosScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Carga los horarios y empleados desde la API cuando se muestre la pantalla
+      // ── HORARIOS: SIN try/catch silencioso ───────────────────────────
+      // Si algo falla aquí (servidor, red, parsing), el error queda
+      // guardado en `provider.error` y se muestra en el banner rojo de
+      // la UI, además de imprimirse en consola con debugPrint dentro
+      // del propio HorarioProvider. Ya no se traga en silencio.
+      final provider = context.read<HorarioProvider>();
+      provider.cargarHorarios();
+      provider.cargarEmpleados();
+
+      // ── ÁREAS: en su propio try/catch ────────────────────────────────
+      // Así, si AreaProvider no está listo o su endpoint falla, NO
+      // bloquea ni oculta lo que pase con Horarios.
       try {
-        final provider = context.read<HorarioProvider>();
-        provider.cargarHorarios();
-        provider.cargarEmpleados();
         final areaProvider = context.read<AreaProvider>();
         areaProvider.cargarAreas();
         areaProvider.cargarDatosDeFormulario();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('⚠️ Error cargando AreaProvider: $e');
+      }
     });
   }
 
@@ -148,6 +158,48 @@ class _HorariosScreenState extends State<HorariosScreen> {
                   backgroundColor: Colors.white,
                 ),
               ),
+
+            // ── NUEVO: banner de error visible ──────────────────────────
+            // Antes, cualquier fallo al hablar con el servidor (404, 500,
+            // timeout, JSON inválido, etc.) quedaba guardado en
+            // `horarioProvider.error` pero NUNCA se mostraba en pantalla,
+            // así que la vista se veía "vacía" sin ninguna pista de qué
+            // pasó. Este bloque lo hace visible y da un botón de reintento.
+            if (horarioProvider.error != null)
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xffFDECEA),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        horarioProvider.error!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => horarioProvider.cargarHorarios(),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+
             // ── Toggle Horarios / Áreas ────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(6),
@@ -753,76 +805,83 @@ class _HorariosScreenState extends State<HorariosScreen> {
           const SizedBox(height: 20),
           SizedBox(
             height: 180,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: (horarios.length + 2).toDouble(),
-                barTouchData: BarTouchData(enabled: true),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      getTitlesWidget: (value, _) => Text(
-                        '${value.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                      ),
+            child: turnos.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Sin datos de turnos aún',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
                     ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, _) {
-                        final i = value.toInt();
-                        if (i < 0 || i >= turnos.length) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            turnos[i],
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xff475569),
+                  )
+                : BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: (horarios.length + 2).toDouble(),
+                      barTouchData: BarTouchData(enabled: true),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: (value, _) => Text(
+                              '${value.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
                             ),
                           ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, _) {
+                              final i = value.toInt();
+                              if (i < 0 || i >= turnos.length) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  turnos[i],
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xff475569),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        rightTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: turnos.asMap().entries.map((e) {
+                        const colors = [
+                          Color(0xff1E88E5),
+                          Color(0xffFB8C00),
+                          Color(0xff6A1B9A),
+                        ];
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: conteo[e.value]!.toDouble(),
+                              color: colors[e.key % colors.length],
+                              width: 24,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ],
                         );
-                      },
+                      }).toList(),
                     ),
                   ),
-                  rightTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  topTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                gridData: FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                barGroups: turnos.asMap().entries.map((e) {
-                  const colors = [
-                    Color(0xff1E88E5),
-                    Color(0xffFB8C00),
-                    Color(0xff6A1B9A),
-                  ];
-                  return BarChartGroupData(
-                    x: e.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: conteo[e.value]!.toDouble(),
-                        color: colors[e.key % colors.length],
-                        width: 24,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
           ),
         ],
       ),
