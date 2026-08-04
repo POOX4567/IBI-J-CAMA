@@ -42,7 +42,7 @@ class MaintenanceService {
   }) async {
     final token = await _getToken();
     final response = await http.post(
-      Uri.parse('$baseUrl/mantenimientos'),
+      Uri.parse('$baseUrl/mantenimiento'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -102,7 +102,7 @@ class MaintenanceService {
   }) async {
     final token = await _getToken();
     final response = await http.put(
-      Uri.parse('$baseUrl/mantenimientos/$id'),
+      Uri.parse('$baseUrl/mantenimiento/$id'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
