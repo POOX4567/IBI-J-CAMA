@@ -4,11 +4,38 @@ import 'package:geolocator/geolocator.dart';
 import 'package:ibi/models/sensor_iot_model.dart';
 import 'package:ibi/models/invernadero_model.dart';
 import 'package:ibi/models/lectura_sensor_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
 import 'package:ibi/utils/notification_service.dart';
 import '../../utils/supervision_helpers.dart';
 
+class _DeviceDisplayData {
+  final int id;
+  final String name;
+  final String description;
+  final String typeKey;
+  final int estadoId;
+  final bool hasLectura;
+
+  _DeviceDisplayData.fromSensor(SensorIot s)
+    : id = s.id,
+      name = s.nombre,
+      description = s.descripcion,
+      typeKey = s.modelo,
+      estadoId = s.estadoId,
+      hasLectura = true;
+
+  _DeviceDisplayData.fromElemento(ElementoEstado e)
+    : id = e.id,
+      name = '${e.elemento} ${e.numero}',
+      description = e.ubicacion,
+      typeKey = e.elemento,
+      estadoId = e.estadoId,
+      hasLectura = false;
+}
+
 class SupervisionDeviceList extends StatelessWidget {
   final List<SensorIot> devices;
+  final List<ElementoEstado> elementos;
   final List<LecturaSensor> lecturas;
   final Invernadero? invernaderoActual;
   final String currentFilter;
@@ -17,6 +44,7 @@ class SupervisionDeviceList extends StatelessWidget {
   const SupervisionDeviceList({
     Key? key,
     required this.devices,
+    required this.elementos,
     required this.lecturas,
     this.invernaderoActual,
     required this.currentFilter,
@@ -25,7 +53,7 @@ class SupervisionDeviceList extends StatelessWidget {
 
   Future<void> _ubicarDispositivo(
     BuildContext context,
-    SensorIot device,
+    _DeviceDisplayData device,
   ) async {
     if (invernaderoActual == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -38,7 +66,7 @@ class SupervisionDeviceList extends StatelessWidget {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Buscando señal GPS para ubicar ${device.nombre}...'),
+        content: Text('Buscando señal GPS para ubicar ${device.name}...'),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -64,7 +92,6 @@ class SupervisionDeviceList extends StatelessWidget {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // Usamos las coordenadas provenientes del backend
       double latDispositivo = invernaderoActual!.latitud;
       double lngDispositivo = invernaderoActual!.longitud;
 
@@ -86,7 +113,7 @@ class SupervisionDeviceList extends StatelessWidget {
               const Icon(LucideIcons.mapPin, color: Colors.white),
               const SizedBox(width: 8),
               Text(
-                '📍 Estás a $distanciaKm km del ${invernaderoActual!.nombre}',
+                '📌 Estás a $distanciaKm km del ${invernaderoActual!.nombre}',
               ),
             ],
           ),
@@ -102,7 +129,6 @@ class SupervisionDeviceList extends StatelessWidget {
     }
   }
 
-  // Traducción del ID de la base de datos al formato que espera SupervisionHelpers
   String _mapEstadoIdToString(int estadoId) {
     switch (estadoId) {
       case 1:
@@ -120,6 +146,14 @@ class SupervisionDeviceList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sensoresData = devices
+        .map((d) => _DeviceDisplayData.fromSensor(d))
+        .toList();
+    final elementosData = elementos
+        .map((e) => _DeviceDisplayData.fromElemento(e))
+        .toList();
+    final allDevices = [...sensoresData, ...elementosData];
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -175,17 +209,17 @@ class SupervisionDeviceList extends StatelessWidget {
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: devices.length,
+            itemCount: allDevices.length,
             itemBuilder: (context, index) {
-              final device = devices[index];
+              final device = allDevices[index];
               final statusString = _mapEstadoIdToString(device.estadoId);
               final status = SupervisionHelpers.getStatusBadge(statusString);
 
-              // Buscamos si existe una lectura actualizada en el endpoint de lecturas
-              // Usamos try-catch o iteración segura
-              final LecturaSensor? lecturaAsociada = lecturas
-                  .where((l) => l.sensorId == device.id)
-                  .firstOrNull;
+              final LecturaSensor? lecturaAsociada = device.hasLectura
+                  ? lecturas
+                      .where((l) => l.sensorId == device.id)
+                      .firstOrNull
+                  : null;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -197,7 +231,7 @@ class SupervisionDeviceList extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      SupervisionHelpers.getDeviceTypeIcon(device.modelo),
+                      SupervisionHelpers.getDeviceTypeIcon(device.typeKey),
                       size: 20,
                       color: Colors.blueGrey,
                     ),
@@ -207,7 +241,7 @@ class SupervisionDeviceList extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            device.nombre,
+                            device.name,
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
@@ -219,7 +253,7 @@ class SupervisionDeviceList extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  device.descripcion,
+                                  device.description,
                                   style: TextStyle(
                                     color: Colors.grey[500],
                                     fontSize: 11,
@@ -263,8 +297,8 @@ class SupervisionDeviceList extends StatelessWidget {
                       onPressed: () async {
                         await NotificationService.solicitarPermisos();
                         await NotificationService.mostrarAlertaFalla(
-                          device.nombre,
-                          device.descripcion,
+                          device.name,
+                          device.description,
                         );
                       },
                       tooltip: "Simular Alerta Crítica",

@@ -36,18 +36,27 @@ class SupervisionHelpers {
   }
 
   static IconData getDeviceTypeIcon(String type) {
-    switch (type) {
-      case "sensor_temperatura":
-        return LucideIcons.thermometer;
-      case "sensor_luz":
-        return LucideIcons.sun;
-      case "actuador_riego":
-        return LucideIcons.play;
-      case "controlador":
-        return LucideIcons.settings;
-      default:
-        return LucideIcons.cpu;
+    final lower = type.toLowerCase();
+
+    if (lower.contains('dht') || lower.contains('temperatura') || lower.contains('temp')) {
+      return LucideIcons.thermometer;
     }
+    if (lower.contains('bh') || lower.contains('luz') || lower.contains('lum')) {
+      return LucideIcons.sun;
+    }
+    if (lower.contains('humedad') || lower.contains('hum')) {
+      return LucideIcons.droplets;
+    }
+    if (lower.contains('ventilador')) {
+      return LucideIcons.fan;
+    }
+    if (lower.contains('bomba') || lower.contains('riego')) {
+      return LucideIcons.play;
+    }
+    if (lower.contains('controlador') || lower.contains('panel')) {
+      return LucideIcons.settings;
+    }
+    return LucideIcons.cpu;
   }
 
   static String formatDate(DateTime date) {

@@ -157,10 +157,15 @@ class _TechnicalSupervisionScreenState
       );
     }
 
-    // Filtramos la lista de Sensores IoT traídos de la API basándonos en el dropdown seleccionado
+    // Filtramos sensores y elementos según el filtro seleccionado
     final filteredSensores = _sensores.where((sensor) {
       if (deviceFilter == "todos") return true;
       return sensor.estadoId.toString() == deviceFilter;
+    }).toList();
+
+    final filteredElementos = _elementos.where((elemento) {
+      if (deviceFilter == "todos") return true;
+      return elemento.estadoId.toString() == deviceFilter;
     }).toList();
 
     return Column(
@@ -191,6 +196,7 @@ class _TechnicalSupervisionScreenState
 
                         SupervisionDeviceList(
                           devices: filteredSensores,
+                          elementos: filteredElementos,
                           lecturas: _lecturas,
                           // Si hay al menos un invernadero, enviamos el primero para usar sus coordenadas
                           invernaderoActual: _invernaderos.isNotEmpty
