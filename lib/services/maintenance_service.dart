@@ -1,44 +1,35 @@
-import 'dart:async';
-import 'package:ibi/models/maintenance_model.dart'; // Cambia 'ibi' por el name de tu app
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/maintenance_model.dart';
 
 class MaintenanceService {
+  static const String baseUrl = 'https://ibijicama.utptics.com/api';
+
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  Future<String?> _getToken() async {
+    return await _storage.read(key: 'token');
+  }
+
   Future<List<MaintenanceModel>> fetchMaintenanceTasks() async {
-    // Simulando consulta a la base de datos (1.2 segundos de delay)
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/mantenimientos'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
-    final List<Map<String, dynamic>> rawData = [
-      {
-        "title": "Falla en sistema eléctrico",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Invernadero Norte",
-      },
-      {
-        "title": "Sensor de humedad desconectado",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Sur",
-      },
-      {
-        "title": "Fuga de agua detectada",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Zona de riego",
-      },
-      {
-        "title": "Mantenimiento preventivo",
-        "severity": "Baja",
-        "status": "Resuelto",
-        "area": "Área general",
-      },
-      {
-        "title": "Temperatura fuera de rango",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Este",
-      },
-    ];
-
-    return rawData.map((json) => MaintenanceModel.fromMap(json)).toList();
+    if (response.statusCode == 200) {
+      List<dynamic> body = jsonDecode(response.body);
+      return body.map((json) => MaintenanceModel.fromJson(json)).toList();
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
   }
 }

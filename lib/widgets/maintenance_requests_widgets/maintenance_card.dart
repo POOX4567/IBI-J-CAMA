@@ -384,7 +384,7 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.clock, color: Colors.orange[600]),
               title: const Text("Marcar como Pendiente"),
               onTap: () {
-                request.status = "pendiente";
+                request.status = "Pendiente";
                 _cerrarYActualizar(ctx, 'Estado actualizado');
               },
             ),
@@ -392,15 +392,15 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.alertCircle, color: Colors.blue[600]),
               title: const Text("Marcar en Progreso"),
               onTap: () {
-                request.status = "en_progreso";
+                request.status = "En proceso";
                 _cerrarYActualizar(ctx, 'Estado actualizado');
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.checkCircle, color: Colors.green[600]),
-              title: const Text("Cerrar Solicitud (Completada)"),
+              title: const Text("Cerrar Solicitud (Resuelto)"),
               onTap: () {
-                request.status = "completada";
+                request.status = "Resuelto";
                 _cerrarYActualizar(ctx, 'Solicitud completada');
               },
             ),
@@ -422,28 +422,17 @@ class MaintenanceCard extends StatelessWidget {
           children: [
             ListTile(
               leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
-              title: const Text("Urgente (Alta)"),
+              title: const Text("Correctivo (Urgente)"),
               onTap: () {
-                request.priority = "alta";
+                request.priority = "Correctivo";
                 _cerrarYActualizar(ctx, 'Prioridad actualizada');
               },
             ),
             ListTile(
-              leading: Icon(LucideIcons.minusCircle, color: Colors.yellow[800]),
-              title: const Text("Media"),
+              leading: Icon(LucideIcons.arrowDownCircle, color: Colors.green[600]),
+              title: const Text("Preventivo"),
               onTap: () {
-                request.priority = "media";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                LucideIcons.arrowDownCircle,
-                color: Colors.green[600],
-              ),
-              title: const Text("Baja"),
-              onTap: () {
-                request.priority = "baja";
+                request.priority = "Preventivo";
                 _cerrarYActualizar(ctx, 'Prioridad actualizada');
               },
             ),

@@ -58,16 +58,16 @@ class MaintenanceSearchFilter extends StatelessWidget {
                     child: Text("Todas las solicitudes"),
                   ),
                   DropdownMenuItem(
-                    value: "pendiente",
+                    value: "Pendiente",
                     child: Text("Pendientes"),
                   ),
                   DropdownMenuItem(
-                    value: "en_progreso",
+                    value: "En proceso",
                     child: Text("En Progreso"),
                   ),
                   DropdownMenuItem(
-                    value: "completada",
-                    child: Text("Completadas"),
+                    value: "Resuelto",
+                    child: Text("Resueltas"),
                   ),
                 ],
                 onChanged: (val) {
