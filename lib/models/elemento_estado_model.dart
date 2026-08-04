@@ -23,17 +23,16 @@ class ElementoEstado {
 
   factory ElementoEstado.fromJson(Map<String, dynamic> json) {
     return ElementoEstado(
-      id: json['id'],
-      invernaderoId: json['invernadero_id'],
-      numero: json['numero'],
-      elemento: json['elemento'],
-      topic: json['topic'],
-      estadoId: json['estado_id'],
-      moduloId: json['modulo_id'],
-      ubicacion: json['ubicacion'],
-      // Extraemos directamente el nombre del estado de la relación anidada
+      id: int.parse(json['id'].toString()),
+      invernaderoId: int.parse(json['invernadero_id'].toString()),
+      numero: int.parse(json['numero'].toString()),
+      elemento: json['elemento'].toString(),
+      topic: json['topic']?.toString(),
+      estadoId: int.parse(json['estado_id'].toString()),
+      moduloId: int.parse(json['modulo_id'].toString()),
+      ubicacion: json['ubicacion'].toString(),
       estadoNombre: json['estado_info'] != null
-          ? json['estado_info']['estado']
+          ? json['estado_info']['estado'].toString()
           : 'Desconocido',
     );
   }

@@ -23,15 +23,15 @@ class SensorIot {
 
   factory SensorIot.fromJson(Map<String, dynamic> json) {
     return SensorIot(
-      id: json['id'],
-      nombre: json['nombre'],
-      numeroSerie: json['numero_serie'],
-      modelo: json['modelo'],
-      descripcion: json['descripcion'],
-      topic: json['topic'],
-      tipoSensorId: json['tipo_sensor_id'],
-      estadoId: json['estado_id'],
-      cultivoId: json['cultivo_id'],
+      id: int.parse(json['id'].toString()),
+      nombre: json['nombre'].toString(),
+      numeroSerie: json['numero_serie'].toString(),
+      modelo: json['modelo'].toString(),
+      descripcion: json['descripcion'].toString(),
+      topic: json['topic']?.toString(),
+      tipoSensorId: int.parse(json['tipo_sensor_id'].toString()),
+      estadoId: int.parse(json['estado_id'].toString()),
+      cultivoId: int.parse(json['cultivo_id'].toString()),
     );
   }
 }

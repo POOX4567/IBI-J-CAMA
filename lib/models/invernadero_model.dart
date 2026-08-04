@@ -15,12 +15,11 @@ class Invernadero {
 
   factory Invernadero.fromJson(Map<String, dynamic> json) {
     return Invernadero(
-      id: json['id'],
-      nombre: json['nombre'],
-      // Parsemos a double porque la API los devuelve como String ("20.12345678")
+      id: int.parse(json['id'].toString()),
+      nombre: json['nombre'].toString(),
       longitud: double.parse(json['longitud'].toString()),
       latitud: double.parse(json['latitud'].toString()),
-      descripcion: json['descripcion'] ?? '',
+      descripcion: json['descripcion']?.toString() ?? '',
     );
   }
 }

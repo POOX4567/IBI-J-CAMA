@@ -2,9 +2,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
+import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'empleado.dart';
 import 'pdf_reports.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class EmpleadoDetailScreen extends StatefulWidget {
   final Empleado empleado;
@@ -17,233 +21,698 @@ class EmpleadoDetailScreen extends StatefulWidget {
 
 class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
   int _selectedTab = 0;
+  bool _isLoading = true;
 
-  final List<Asistencia> _asistencias = [
-    Asistencia(
-      dia: 'LUN',
-      fecha: '20',
-      mes: 'MAY',
-      estado: 'presente',
-      hora: '06:00 AM',
-    ),
-    Asistencia(
-      dia: 'MAR',
-      fecha: '21',
-      mes: 'MAY',
-      estado: 'presente',
-      hora: '06:05 AM',
-    ),
-    Asistencia(
-      dia: 'MIÉ',
-      fecha: '22',
-      mes: 'MAY',
-      estado: 'retardo',
-      hora: '06:20 AM',
-    ),
-    Asistencia(
-      dia: 'JUE',
-      fecha: '23',
-      mes: 'MAY',
-      estado: 'presente',
-      hora: '06:02 AM',
-    ),
-    Asistencia(
-      dia: 'VIE',
-      fecha: '24',
-      mes: 'MAY',
-      estado: 'falta',
-      hora: '--',
-    ),
-    Asistencia(
-      dia: 'SÁB',
-      fecha: '25',
-      mes: 'MAY',
-      estado: 'presente',
-      hora: '06:00 AM',
-    ),
-  ];
+  // Datos desde la API
+  Map<String, dynamic> _empleadoData = {};
+  List<dynamic> _asistencias = [];
+  List<dynamic> _actividades = [];
+  List<dynamic> _observaciones = [];
 
-  final List<Actividad> _actividades = [
-    Actividad(
-      titulo: 'Inspección de humedad',
-      fecha: '20/05/2026',
-      estado: 'completada',
-      descripcion: 'Revisión de niveles de humedad en Sector 4',
-      progreso: 1.0,
-    ),
-    Actividad(
-      titulo: 'Ajuste de riego',
-      fecha: '21/05/2026',
-      estado: 'completada',
-      descripcion: 'Configuración manual del sistema de riego',
-      progreso: 1.0,
-    ),
-    Actividad(
-      titulo: 'Mantenimiento de sensores',
-      fecha: '22/05/2026',
-      estado: 'progreso',
-      descripcion: 'Calibración de sensores de temperatura',
-      progreso: 0.7,
-    ),
-    Actividad(
-      titulo: 'Fertilización',
-      fecha: '23/05/2026',
-      estado: 'pendiente',
-      descripcion: 'Aplicación de fertilizante orgánico',
-      progreso: 0.0,
-    ),
-    Actividad(
-      titulo: 'Poda de plantas',
-      fecha: '24/05/2026',
-      estado: 'completada',
-      descripcion: 'Poda de plantas en Invernadero 1',
-      progreso: 1.0,
-    ),
-  ];
+  final storage = const FlutterSecureStorage();
 
-  final List<Observacion> _observaciones = [
-    Observacion(
-      fecha: '20/05/2026',
-      texto: 'Excelente trabajo en la inspección de humedad. Muy detallado.',
-      autor: 'Supervisor Juan',
-      hora: '10:30 AM',
-    ),
-    Observacion(
-      fecha: '18/05/2026',
-      texto: 'Recordar llegar puntual al turno matutino.',
-      autor: 'Supervisor Juan',
-      hora: '08:15 AM',
-    ),
-    Observacion(
-      fecha: '15/05/2026',
-      texto: 'Buen manejo del sistema de riego automático.',
-      autor: 'Supervisor Juan',
-      hora: '11:45 AM',
-    ),
-  ];
+  // Base URL de la API en la nube
+  static const String _baseUrl = 'https://ibijicama.utptics.com/api';
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatosEmpleado();
+  }
+
+  Future<String?> _getToken() async {
+    return await storage.read(key: 'token');
+  }
+
+  Future<void> _cargarDatosEmpleado() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await _getToken();
+
+      // 1. Obtener datos del empleado
+      final empleadoResponse = await http.get(
+        Uri.parse('$_baseUrl/employees/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (empleadoResponse.statusCode == 200) {
+        final Map<String, dynamic> empleadoData = json.decode(
+          empleadoResponse.body,
+        );
+        if (empleadoData['success'] == true) {
+          _empleadoData = empleadoData['data'] ?? {};
+        }
+      }
+
+      // 2. Obtener asistencia
+      await _cargarAsistencias();
+
+      // 3. Obtener actividades
+      await _cargarActividades();
+
+      // 4. Obtener observaciones
+      await _cargarObservaciones();
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar datos: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // ASISTENCIAS
+  // ============================================================
+  Future<void> _cargarAsistencias() async {
+    try {
+      final token = await _getToken();
+
+      final asistenciaResponse = await http.get(
+        Uri.parse('$_baseUrl/attendance/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (asistenciaResponse.statusCode == 200) {
+        final Map<String, dynamic> asistenciaData = json.decode(
+          asistenciaResponse.body,
+        );
+        if (asistenciaData['success'] == true) {
+          setState(() {
+            _asistencias = asistenciaData['data'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      print('Error al cargar asistencias: $e');
+    }
+  }
+
+  Future<void> _registrarAsistencia(String tipo) async {
+    try {
+      final token = await _getToken();
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/attendance'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'user_id': widget.empleado.id, 'type': tipo}),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ ${tipo} registrada correctamente'),
+              backgroundColor: const Color(0xFF2E7D32),
+            ),
+          );
+          await _cargarAsistencias();
+        } else {
+          throw Exception(data['message'] ?? 'Error al registrar');
+        }
+      } else {
+        throw Exception('Error ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _mostrarDialogoAsistencia() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Registrar Asistencia'),
+          content: const Text('¿Qué tipo de registro deseas hacer?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _registrarAsistencia('Entrada');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+              child: const Text('Entrada'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _registrarAsistencia('Salida');
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Salida'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // ACTIVIDADES
+  // ============================================================
+  Future<void> _cargarActividades() async {
+    try {
+      final token = await _getToken();
+
+      final actividadesResponse = await http.get(
+        Uri.parse('$_baseUrl/activities/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (actividadesResponse.statusCode == 200) {
+        final Map<String, dynamic> actividadesData = json.decode(
+          actividadesResponse.body,
+        );
+        if (actividadesData['success'] == true) {
+          setState(() {
+            _actividades = actividadesData['data'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      print('Error al cargar actividades: $e');
+    }
+  }
+
+  Future<void> _registrarActividad(String actividad, String descripcion) async {
+    try {
+      final token = await _getToken();
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/activities'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'user_id': widget.empleado.id,
+          'activity': actividad,
+          'description': descripcion,
+          'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Actividad registrada correctamente'),
+              backgroundColor: Color(0xFF2E7D32),
+            ),
+          );
+          await _cargarActividades();
+        } else {
+          throw Exception(data['message'] ?? 'Error al registrar');
+        }
+      } else {
+        throw Exception('Error ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _mostrarDialogoActividad() {
+    final TextEditingController actividadController = TextEditingController();
+    final TextEditingController descripcionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Registrar Actividad'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: actividadController,
+                decoration: const InputDecoration(
+                  labelText: 'Actividad',
+                  hintText: 'Ej: Supervisión de cultivos',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descripcionController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Descripción',
+                  hintText: 'Describe la actividad realizada...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (actividadController.text.isNotEmpty) {
+                  Navigator.pop(context);
+                  _registrarActividad(
+                    actividadController.text,
+                    descripcionController.text,
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('El campo actividad es obligatorio'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+              child: const Text('Registrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // OBSERVACIONES
+  // ============================================================
+  Future<void> _cargarObservaciones() async {
+    try {
+      final token = await _getToken();
+
+      final observacionesResponse = await http.get(
+        Uri.parse('$_baseUrl/observations/${widget.empleado.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (observacionesResponse.statusCode == 200) {
+        final Map<String, dynamic> observacionesData = json.decode(
+          observacionesResponse.body,
+        );
+        if (observacionesData['success'] == true) {
+          setState(() {
+            _observaciones = observacionesData['data'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      print('Error al cargar observaciones: $e');
+    }
+  }
+
+  Future<void> _registrarObservacion(String texto) async {
+    try {
+      final token = await _getToken();
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/observations'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'user_id': widget.empleado.id,
+          'observation': texto,
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Observación registrada correctamente'),
+              backgroundColor: Color(0xFF2E7D32),
+            ),
+          );
+          await _cargarObservaciones();
+        } else {
+          throw Exception(data['message'] ?? 'Error al registrar');
+        }
+      } else {
+        throw Exception('Error ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _editarObservacion(int id, String nuevoTexto) async {
+    try {
+      final token = await _getToken();
+
+      final response = await http.put(
+        Uri.parse('$_baseUrl/observations/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'observation': nuevoTexto}),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Observación actualizada correctamente'),
+              backgroundColor: Color(0xFF2E7D32),
+            ),
+          );
+          await _cargarObservaciones();
+        } else {
+          throw Exception(data['message'] ?? 'Error al actualizar');
+        }
+      } else {
+        throw Exception('Error ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _mostrarDialogoObservacion() {
+    final TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Agregar Observación'),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Escribe tu observación...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  Navigator.pop(context);
+                  _registrarObservacion(controller.text);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('El campo es obligatorio'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _mostrarDialogoEditarObservacion(Map<String, dynamic> observacion) {
+    final TextEditingController controller = TextEditingController(
+      text: observacion['observation'] ?? '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Editar Observación'),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Edita tu observación...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  Navigator.pop(context);
+                  _editarObservacion(observacion['id'], controller.text);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('El campo es obligatorio'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+              child: const Text('Actualizar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // ESTADÍSTICAS
+  // ============================================================
+  Map<String, dynamic> _getEstadisticasAsistencia() {
+    int entradas = 0;
+    int salidas = 0;
+
+    for (var item in _asistencias) {
+      if (item['type'] == 'Entrada') entradas++;
+      if (item['type'] == 'Salida') salidas++;
+    }
+
+    final total = _asistencias.length;
+    final porcentaje = total > 0 ? (entradas / total * 100) : 0;
+
+    return {
+      'entradas': entradas,
+      'salidas': salidas,
+      'total': total,
+      'porcentaje': porcentaje.toStringAsFixed(0),
+    };
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
+    final estadisticas = _getEstadisticasAsistencia();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      body: Column(
-        children: [
-          // Header personalizado
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
-              ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  // Botón de retroceso
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+            )
+          : Column(
+              children: [
+                // Header personalizado
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    child: Column(
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.arrow_back,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => Navigator.pop(context),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.arrow_back,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.picture_as_pdf,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () => _generarReporte(),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 20,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: Image.network(
+                              widget.empleado.fotoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.white,
+                                  child: const Icon(
+                                    Icons.person,
+                                    size: 50,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          widget.empleado.nombre,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.empleado.rol,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
-                  // Foto de perfil
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
+                ),
+
+                // Pestañas
+                Container(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    child: ClipOval(
-                      child: Image.network(
-                        widget.empleado.fotoUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.white,
-                            child: const Icon(
-                              Icons.person,
-                              size: 50,
-                              color: Color(0xFF2E7D32),
-                            ),
-                          );
-                        },
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildTab('Asistencias', 0),
+                          const SizedBox(width: 12),
+                          _buildTab('Actividades', 1),
+                          const SizedBox(width: 12),
+                          _buildTab('Observaciones', 2),
+                          const SizedBox(width: 12),
+                          _buildTab('Reportes', 3),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.empleado.nombre,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-
-          // Pestañas con scroll horizontal
-          Container(
-            color: Colors.white,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildTab('Asistencias', 0),
-                    const SizedBox(width: 12),
-                    _buildTab('Actividades', 1),
-                    const SizedBox(width: 12),
-                    _buildTab('Observaciones', 2),
-                    const SizedBox(width: 12),
-                    _buildTab('Reportes', 3),
-                  ],
                 ),
-              ),
-            ),
-          ),
 
-          // Contenido de las pestañas (expanded para que ocupe el resto)
-          Expanded(child: _buildCurrentTab()),
-        ],
-      ),
+                // Contenido
+                Expanded(child: _buildCurrentTab()),
+              ],
+            ),
     );
   }
 
@@ -288,15 +757,16 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     }
   }
 
+  // ============================================================
+  // TAB: ASISTENCIAS
+  // ============================================================
   Widget _buildAsistenciasTab() {
-    int presentes = _asistencias.where((a) => a.estado == 'presente').length;
-    int retardos = _asistencias.where((a) => a.estado == 'retardo').length;
-    int faltas = _asistencias.where((a) => a.estado == 'falta').length;
-    double porcentaje = (presentes / _asistencias.length) * 100;
+    final estadisticas = _getEstadisticasAsistencia();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Tarjeta de resumen con gráfica
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -315,7 +785,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
           child: Column(
             children: [
               const Text(
-                'ASISTENCIA SEMANAL',
+                'RESUMEN DE ASISTENCIA',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -326,9 +796,21 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem('${presentes}d', 'Presentes', Colors.white),
-                  _buildStatItem('${retardos}d', 'Retardos', Colors.orange),
-                  _buildStatItem('${faltas}d', 'Faltas', Colors.red),
+                  _buildStatItem(
+                    '${estadisticas['entradas']}',
+                    'Entradas',
+                    Colors.white,
+                  ),
+                  _buildStatItem(
+                    '${estadisticas['salidas']}',
+                    'Salidas',
+                    Colors.orange,
+                  ),
+                  _buildStatItem(
+                    '${estadisticas['total']}',
+                    'Total',
+                    Colors.blue,
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -337,7 +819,9 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                 child: SizedBox(
                   height: 8,
                   child: LinearProgressIndicator(
-                    value: porcentaje / 100,
+                    value: double.tryParse(estadisticas['porcentaje']) != null
+                        ? double.parse(estadisticas['porcentaje']) / 100
+                        : 0,
                     backgroundColor: Colors.white.withOpacity(0.3),
                     color: Colors.white,
                   ),
@@ -345,15 +829,35 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${porcentaje.toStringAsFixed(0)}% de asistencia',
+                '${estadisticas['porcentaje']}% de asistencia',
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 16),
+
+        // Botón para registrar asistencia
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _mostrarDialogoAsistencia,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('Registrar Asistencia'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
+
         const Text(
-          'REGISTRO DIARIO',
+          'HISTORIAL DE ASISTENCIA',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -361,7 +865,18 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._asistencias.map((asistencia) => _buildAsistenciaCard(asistencia)),
+        if (_asistencias.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'No hay registros de asistencia',
+                style: TextStyle(color: Color(0xFF5D4037)),
+              ),
+            ),
+          )
+        else
+          ..._asistencias.reversed.map((item) => _buildAsistenciaCard(item)),
       ],
     );
   }
@@ -386,22 +901,10 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  Widget _buildAsistenciaCard(Asistencia asistencia) {
-    Color color;
-    IconData icon;
-    switch (asistencia.estado) {
-      case 'presente':
-        color = Colors.green;
-        icon = Icons.check_circle;
-        break;
-      case 'retardo':
-        color = Colors.orange;
-        icon = Icons.warning;
-        break;
-      default:
-        color = Colors.red;
-        icon = Icons.cancel;
-    }
+  Widget _buildAsistenciaCard(Map<String, dynamic> item) {
+    final isEntrada = item['type'] == 'Entrada';
+    final color = isEntrada ? Colors.green : Colors.orange;
+    final icon = isEntrada ? Icons.login : Icons.logout;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -426,23 +929,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  asistencia.fecha,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  asistencia.mes,
-                  style: TextStyle(fontSize: 10, color: color),
-                ),
-              ],
-            ),
+            child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -450,84 +937,62 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  asistencia.dia,
-                  style: const TextStyle(
+                  item['type'] ?? 'Sin tipo',
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2E7D32),
+                    color: color,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  asistencia.estado == 'presente'
-                      ? 'Presente'
-                      : asistencia.estado == 'retardo'
-                      ? 'Retardo'
-                      : 'Falta',
-                  style: TextStyle(color: color, fontSize: 12),
+                  item['date_time'] ?? '',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF5D4037),
+                  ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 4),
-              Text(
-                asistencia.hora,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF5D4037)),
-              ),
-            ],
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: Color(0xFF5D4037),
           ),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // TAB: ACTIVIDADES
+  // ============================================================
   Widget _buildActividadesTab() {
-    int completadas = _actividades
-        .where((a) => a.estado == 'completada')
-        .length;
-    int enProgreso = _actividades.where((a) => a.estado == 'progreso').length;
-    int pendientes = _actividades.where((a) => a.estado == 'pendiente').length;
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildActivitySummary(
-                'Completadas',
-                '$completadas',
-                Colors.green,
-                Icons.check_circle,
+        // Botón para registrar actividad
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _mostrarDialogoActividad,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('Registrar Actividad'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActivitySummary(
-                'En Progreso',
-                '$enProgreso',
-                Colors.orange,
-                Icons.hourglass_empty,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActivitySummary(
-                'Pendientes',
-                '$pendientes',
-                Colors.grey,
-                Icons.pending,
-              ),
-            ),
-          ],
+          ),
         ),
         const SizedBox(height: 20),
+
         const Text(
-          'HISTORIAL DE TAREAS',
+          'ACTIVIDADES REALIZADAS',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -535,19 +1000,26 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._actividades.map((actividad) => _buildActividadCard(actividad)),
+        if (_actividades.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'No hay actividades registradas',
+                style: TextStyle(color: Color(0xFF5D4037)),
+              ),
+            ),
+          )
+        else
+          ..._actividades.map((item) => _buildActividadCard(item)),
       ],
     );
   }
 
-  Widget _buildActivitySummary(
-    String title,
-    String count,
-    Color color,
-    IconData icon,
-  ) {
+  Widget _buildActividadCard(Map<String, dynamic> item) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -556,50 +1028,116 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.assignment,
+                  size: 20,
+                  color: Color(0xFF2E7D32),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item['activity'] ?? 'Sin actividad',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ),
+            ],
           ),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF5D4037)),
-            textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          if (item['description'] != null && item['description'].isNotEmpty)
+            Text(
+              item['description'],
+              style: const TextStyle(fontSize: 13, color: Color(0xFF5D4037)),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_today,
+                size: 12,
+                color: Color(0xFF81C784),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                item['date'] ?? '',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF81C784)),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActividadCard(Actividad actividad) {
-    Color color;
-    IconData icon;
-    String estadoText;
-    switch (actividad.estado) {
-      case 'completada':
-        color = Colors.green;
-        icon = Icons.check_circle;
-        estadoText = 'Completada';
-        break;
-      case 'progreso':
-        color = Colors.orange;
-        icon = Icons.hourglass_empty;
-        estadoText = 'En progreso';
-        break;
-      default:
-        color = Colors.grey;
-        icon = Icons.pending;
-        estadoText = 'Pendiente';
-    }
+  // ============================================================
+  // TAB: OBSERVACIONES
+  // ============================================================
+  Widget _buildObservacionesTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Botón para agregar observación
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _mostrarDialogoObservacion,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('Agregar Observación'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
 
+        const Text(
+          'OBSERVACIONES',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2E7D32),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_observaciones.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'No hay observaciones registradas',
+                style: TextStyle(color: Color(0xFF5D4037)),
+              ),
+            ),
+          )
+        else
+          ..._observaciones.map((item) => _buildObservacionCard(item)),
+      ],
+    );
+  }
+
+  Widget _buildObservacionCard(Map<String, dynamic> item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -607,259 +1145,91 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _showActividadDetalle(actividad),
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, color: color, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        actividad.titulo,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32).withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        estadoText,
-                        style: TextStyle(fontSize: 10, color: color),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  actividad.descripcion,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF5D4037),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      size: 12,
-                      color: Color(0xFF81C784),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      actividad.fecha,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF81C784),
-                      ),
-                    ),
-                  ],
-                ),
-                if (actividad.estado == 'progreso') ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: SizedBox(
-                      height: 6,
-                      child: LinearProgressIndicator(
-                        value: actividad.progreso,
-                        backgroundColor: Colors.grey.shade200,
-                        color: color,
-                      ),
+                    child: const Icon(
+                      Icons.comment,
+                      size: 16,
+                      color: Color(0xFF2E7D32),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(width: 12),
                   Text(
-                    '${(actividad.progreso * 100).toStringAsFixed(0)}% completado',
+                    'Observación #${item['id']}',
                     style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF5D4037),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2E7D32),
                     ),
                   ),
                 ],
-                if (actividad.estado != 'completada')
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => _marcarComoCompletada(actividad),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Marcar como completada'),
-                      ),
-                    ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                    onPressed: () => _mostrarDialogoEditarObservacion(item),
                   ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            item['observation'] ?? '',
+            style: const TextStyle(fontSize: 14, color: Color(0xFF5D4037)),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_today,
+                size: 12,
+                color: Color(0xFF81C784),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                item['created_at'] ?? '',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF81C784)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildObservacionesTab() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: ElevatedButton.icon(
-            onPressed: _agregarObservacion,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Agregar observación'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _observaciones.length,
-            itemBuilder: (context, index) {
-              final obs = _observaciones[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2E7D32).withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.comment,
-                                size: 16,
-                                color: Color(0xFF2E7D32),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  obs.autor,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2E7D32),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  '${obs.fecha} • ${obs.hora}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF5D4037),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        obs.texto,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
+  // ============================================================
+  // TAB: REPORTES
+  // ============================================================
   Widget _buildReportesTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _buildReporteCard(
           titulo: 'Reporte Semanal',
-          periodo: 'Semana 21 (20-24 Mayo)',
+          periodo: 'Semana Actual',
           icon: Icons.calendar_today,
           color: const Color(0xFF2E7D32),
-          estadisticas: const [
-            'Asistencias: 4/6 días',
-            'Retardos: 1',
-            'Faltas: 1',
-            'Actividades completadas: 3/5',
-            'Cumplimiento: 75%',
-          ],
         ),
         const SizedBox(height: 16),
         _buildReporteCard(
           titulo: 'Reporte Mensual',
-          periodo: 'Mayo 2026',
+          periodo: 'Mes Actual',
           icon: Icons.calendar_month,
           color: const Color(0xFF81C784),
-          estadisticas: const [
-            'Asistencias: 18/22 días',
-            'Retardos: 3',
-            'Faltas: 2',
-            'Actividades completadas: 12/15',
-            'Cumplimiento: 82%',
-          ],
         ),
         const SizedBox(height: 16),
         _buildReporteCard(
@@ -867,13 +1237,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
           periodo: 'Evaluación General',
           icon: Icons.assessment,
           color: const Color(0xFF5D4037),
-          estadisticas: const [
-            'Puntualidad: 85%',
-            'Calidad de trabajo: 92%',
-            'Trabajo en equipo: 88%',
-            'Iniciativa: 90%',
-            'Overall: 88.75% - Nivel Excelente',
-          ],
         ),
       ],
     );
@@ -884,15 +1247,12 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     required String periodo,
     required IconData icon,
     required Color color,
-    required List<String> estadisticas,
   }) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.white, color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
@@ -943,31 +1303,15 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
             ],
           ),
           const Divider(height: 24),
-          ...estadisticas.map(
-            (stat) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.circle, size: 6, color: color),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      stat,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF5D4037),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          Text('• Asistencias: ${_asistencias.length} registros'),
+          Text('• Actividades: ${_actividades.length} realizadas'),
+          Text('• Observaciones: ${_observaciones.length} registradas'),
+          Text('• Estado: ${widget.empleado.estado}'),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => _generarReporte(titulo),
+              onPressed: () => _generarReporte(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: color,
                 foregroundColor: Colors.white,
@@ -984,76 +1328,12 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  void _marcarComoCompletada(Actividad actividad) {
-    setState(() {
-      actividad.estado = 'completada';
-      actividad.progreso = 1.0;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Actividad marcada como completada'),
-        backgroundColor: Color(0xFF2E7D32),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  // ============================================================
+  // GENERAR REPORTE PDF
+  // ============================================================
+  Future<void> _generarReporte() async {
+    final estadisticas = _getEstadisticasAsistencia();
 
-  void _agregarObservacion() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Nueva Observación'),
-          content: TextField(
-            controller: controller,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Escribe tu observación...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (controller.text.isNotEmpty) {
-                  setState(() {
-                    _observaciones.insert(
-                      0,
-                      Observacion(
-                        fecha: _getCurrentDate(),
-                        texto: controller.text,
-                        autor: 'Supervisor Actual',
-                        hora: _getCurrentTime(),
-                      ),
-                    );
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Observación agregada'),
-                      backgroundColor: Color(0xFF2E7D32),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-              ),
-              child: const Text('Agregar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _generarReporte(String tipo) async {
-    // Mostrar diálogo de carga
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1065,98 +1345,42 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
 
     try {
-      // Calcular estadísticas de asistencia
-      int presentes = _asistencias.where((a) => a.estado == 'presente').length;
-      int retardos = _asistencias.where((a) => a.estado == 'retardo').length;
-      int faltas = _asistencias.where((a) => a.estado == 'falta').length;
-      double porcentaje = (presentes / _asistencias.length) * 100;
+      final List<String> estadisticasList = [
+        'Entradas: ${estadisticas['entradas']}',
+        'Salidas: ${estadisticas['salidas']}',
+        'Total registros: ${estadisticas['total']}',
+        'Actividades realizadas: ${_actividades.length}',
+        'Observaciones: ${_observaciones.length}',
+        'Estado: ${widget.empleado.estado}',
+      ];
 
-      // Preparar estadísticas según el tipo de reporte
-      List<String> estadisticas;
-      Map<String, dynamic> datosAsistencia;
-      String periodoTexto;
-
-      if (tipo.contains('Semanal')) {
-        periodoTexto = 'Semana 21 (20-24 Mayo 2026)';
-        estadisticas = [
-          'Asistencias: 4/6 días',
-          'Retardos: 1',
-          'Faltas: 1',
-          'Actividades completadas: 3/5',
-          'Cumplimiento: 75%',
-          'Puntualidad: 85%',
-        ];
-        datosAsistencia = {
-          'presentes': presentes,
-          'retardos': retardos,
-          'faltas': faltas,
-          'porcentaje': porcentaje.toStringAsFixed(0),
+      final List<Map<String, dynamic>> actividadesList = _actividades.map((
+        item,
+      ) {
+        return {
+          'actividad': item['activity'] ?? 'Sin actividad',
+          'fecha': item['date'] ?? '',
+          'estado': 'Completada',
         };
-      } else if (tipo.contains('Mensual')) {
-        periodoTexto = 'Mayo 2026';
-        estadisticas = [
-          'Asistencias: 18/22 días',
-          'Retardos: 3',
-          'Faltas: 2',
-          'Actividades completadas: 12/15',
-          'Cumplimiento: 82%',
-          'Puntualidad: 88%',
-        ];
-        datosAsistencia = {
-          'presentes': 18,
-          'retardos': 3,
-          'faltas': 2,
-          'porcentaje': 82,
-        };
-      } else {
-        periodoTexto = 'Evaluación General';
-        estadisticas = [
-          'Puntualidad: 85%',
-          'Calidad de trabajo: 92%',
-          'Trabajo en equipo: 88%',
-          'Iniciativa: 90%',
-          'Overall: 88.75% - Nivel Excelente',
-        ];
-        datosAsistencia = {
-          'presentes': presentes,
-          'retardos': retardos,
-          'faltas': faltas,
-          'porcentaje': porcentaje.toStringAsFixed(0),
-        };
-      }
-
-      // Preparar actividades para el PDF
-      List<Map<String, dynamic>> actividadesPDF = _actividades.map((a) {
-        String estadoTexto;
-        switch (a.estado) {
-          case 'completada':
-            estadoTexto = 'Completada';
-            break;
-          case 'progreso':
-            estadoTexto = 'En progreso';
-            break;
-          default:
-            estadoTexto = 'Pendiente';
-        }
-        return {'titulo': a.titulo, 'fecha': a.fecha, 'estado': estadoTexto};
       }).toList();
 
-      // Generar el PDF
       final pdfBytes = await PdfReports.generarReporteEmpleado(
         nombre: widget.empleado.nombre,
         rol: widget.empleado.rol,
         zona: widget.empleado.zona,
-        periodo: periodoTexto,
-        estadisticas: estadisticas,
-        datosAsistencia: datosAsistencia,
-        actividades: actividadesPDF,
+        periodo: DateFormat('MMMM yyyy', 'es').format(DateTime.now()),
+        estadisticas: estadisticasList,
+        datosAsistencia: {
+          'presentes': estadisticas['entradas'],
+          'retardos': 0,
+          'faltas': 0,
+          'porcentaje': estadisticas['porcentaje'],
+        },
+        actividades: actividadesList,
       );
 
-      // Cerrar diálogo de carga
       Navigator.pop(context);
-
-      // Mostrar opciones para compartir o imprimir
-      _showReporteOptions(pdfBytes, tipo);
+      _showReporteOptions(pdfBytes);
     } catch (e) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1168,7 +1392,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     }
   }
 
-  void _showReporteOptions(Uint8List pdfBytes, String tipo) {
+  void _showReporteOptions(Uint8List pdfBytes) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -1199,7 +1423,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                       color: const Color(0xFF2E7D32),
                       onPressed: () async {
                         Navigator.pop(context);
-                        await _compartirReporte(pdfBytes, tipo);
+                        await _compartirReporte(pdfBytes);
                       },
                     ),
                     _buildOptionButton(
@@ -1217,7 +1441,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                       color: const Color(0xFF5D4037),
                       onPressed: () async {
                         Navigator.pop(context);
-                        await _guardarReporte(pdfBytes, tipo);
+                        await _guardarReporte(pdfBytes);
                       },
                     ),
                   ],
@@ -1260,7 +1484,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     );
   }
 
-  Future<void> _compartirReporte(Uint8List pdfBytes, String tipo) async {
+  Future<void> _compartirReporte(Uint8List pdfBytes) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName =
         'reporte_${widget.empleado.nombre.replaceAll(' ', '_')}_$timestamp.pdf';
@@ -1268,13 +1492,12 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     try {
       await Share.shareXFiles([
         XFile.fromData(pdfBytes, name: fileName),
-      ], text: 'Reporte de ${widget.empleado.nombre} - $tipo');
+      ], text: 'Reporte de ${widget.empleado.nombre}');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Reporte listo para compartir'),
           backgroundColor: Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
@@ -1303,7 +1526,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     }
   }
 
-  Future<void> _guardarReporte(Uint8List pdfBytes, String tipo) async {
+  Future<void> _guardarReporte(Uint8List pdfBytes) async {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName =
@@ -1315,7 +1538,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
         SnackBar(
           content: Text('Reporte guardado como $fileName'),
           backgroundColor: Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
@@ -1327,89 +1549,4 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
       );
     }
   }
-
-  void _showActividadDetalle(Actividad actividad) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(actividad.titulo),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Fecha: ${actividad.fecha}'),
-              const SizedBox(height: 8),
-              Text('Descripción: ${actividad.descripcion}'),
-              const SizedBox(height: 8),
-              Text('Estado: ${actividad.estado}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _getCurrentDate() {
-    final now = DateTime.now();
-    return '${now.day}/${now.month}/${now.year}';
-  }
-
-  String _getCurrentTime() {
-    final now = DateTime.now();
-    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-// Modelos auxiliares
-class Asistencia {
-  final String dia;
-  final String fecha;
-  final String mes;
-  final String estado;
-  final String hora;
-
-  Asistencia({
-    required this.dia,
-    required this.fecha,
-    required this.mes,
-    required this.estado,
-    required this.hora,
-  });
-}
-
-class Actividad {
-  String titulo;
-  String fecha;
-  String estado;
-  String descripcion;
-  double progreso;
-
-  Actividad({
-    required this.titulo,
-    required this.fecha,
-    required this.estado,
-    required this.descripcion,
-    required this.progreso,
-  });
-}
-
-class Observacion {
-  final String fecha;
-  final String texto;
-  final String autor;
-  final String hora;
-
-  Observacion({
-    required this.fecha,
-    required this.texto,
-    required this.autor,
-    required this.hora,
-  });
 }

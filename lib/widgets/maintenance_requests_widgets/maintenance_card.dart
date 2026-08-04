@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
 import '../../utils/maintenance_helpers.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ibi/screens/screens_empleados/chat_screen.dart';
 
 class MaintenanceCard extends StatelessWidget {
   final MaintenanceRequest request;
@@ -299,13 +298,9 @@ class MaintenanceCard extends StatelessWidget {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                // Cambiamos la función que se ejecuta aquí
                 onPressed: () => _mostrarOpcionesDeContacto(context),
-                icon: const Icon(
-                  LucideIcons.phone,
-                  size: 16,
-                ), // Cambiamos el icono
-                label: const Text("Contactar"), // Cambiamos el texto
+                icon: const Icon(LucideIcons.phone, size: 16),
+                label: const Text("Contactar"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   foregroundColor: Colors.white,
@@ -495,10 +490,8 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  // Nuevo menú para elegir el método de contacto
   void _mostrarOpcionesDeContacto(BuildContext context) {
     final persona = request.assignedTo ?? request.reportedBy;
-    // Como el mock_data no tiene teléfonos, usamos uno ficticio para el ejemplo
     const numeroTelefono = "9991234567";
 
     showModalBottomSheet(
@@ -538,38 +531,12 @@ class MaintenanceCard extends StatelessWidget {
                 _hacerLlamada(numeroTelefono, context);
               },
             ),
-            ListTile(
-              leading: const Icon(
-                LucideIcons.messageSquare,
-                color: Colors.blue,
-              ),
-              title: const Text("Enviar mensaje interno"),
-              onTap: () {
-                Navigator.pop(ctx); // Cierra el menú de abajo
-
-                // Navegamos a tu ChatScreen oficial
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatScreen(
-                      nombre: persona,
-                      rol: 'Técnico de Mantenimiento',
-                      // Como aún no tenemos fotos reales en el mock_data,
-                      // esta API gratuita generará un avatar verde con las iniciales del técnico:
-                      fotoUrl:
-                          'https://ui-avatars.com/api/?name=${persona.replaceAll(' ', '+')}&background=81C784&color=fff',
-                    ),
-                  ),
-                );
-              },
-            ),
           ],
         ),
       ),
     );
   }
 
-  // La función principal de url_launcher
   Future<void> _hacerLlamada(String numero, BuildContext context) async {
     final Uri urlLlamada = Uri(scheme: 'tel', path: numero);
 
@@ -589,45 +556,9 @@ class MaintenanceCard extends StatelessWidget {
     }
   }
 
-  // Mantenemos tu chat simulado intacto, solo recibe el nombre por parámetro
-  void _abrirChatSimulado(BuildContext context, String persona) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Chat con $persona', style: const TextStyle(fontSize: 16)),
-        content: const TextField(
-          maxLines: 3,
-          decoration: InputDecoration(
-            hintText: 'Escribe un mensaje...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Mensaje enviado')));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-            ),
-            child: const Text('Enviar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _cerrarYActualizar(BuildContext context, String mensaje) {
     Navigator.pop(context);
-    onStateUpdated(); // Llama a setState en la pantalla principal para refrescar la UI
+    onStateUpdated();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(mensaje),

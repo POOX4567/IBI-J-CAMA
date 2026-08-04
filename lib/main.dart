@@ -5,7 +5,7 @@ import 'package:provider/provider.dart'; // PROVIDER
 import 'package:hive_flutter/hive_flutter.dart'; // HIVE
 
 // Tus pantallas y componentes existentes
-import 'screens/login_screen.dart';
+import './screens/Login/Login.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'package:ibi/utils/notification_service.dart';
 
@@ -25,9 +25,6 @@ void main() async {
   await NotificationService.init();
 
   // HIVE: inicializa el almacenamiento local de datos
-  await Hive.initFlutter();
-  Hive.registerAdapter(AreaAdapter()); // adaptador generado por hive_generator
-
   runApp(
     // PROVIDER: Inyección global de tus estados (Horarios y Áreas)
     MultiProvider(
@@ -68,9 +65,9 @@ class MyApp extends StatelessWidget {
       locale: const Locale('es', 'ES'),
 
       // Tu flujo original: Inicia en el Login y respeta tus rutas de navegación
-      home: const LoginScreen(),
+      home: const Login(),
       routes: {
-        '/login': (context) => const LoginScreen(),
+        '/login': (context) => const Login(),
         '/home': (context) => const BottomNavBar(),
       },
     );

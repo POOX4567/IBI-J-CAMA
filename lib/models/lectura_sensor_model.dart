@@ -17,10 +17,10 @@ class LecturaSensor {
 
   factory LecturaSensor.fromJson(Map<String, dynamic> json) {
     return LecturaSensor(
-      id: json['id'],
-      sensorId: json['sensor_id'],
-      lecturaDatetime: json['lectura_datetime'],
-      valor: json['valor'].toString(),
+      id: int.parse(json['id'].toString()),
+      sensorId: int.parse(json['sensor_id'].toString()),
+      lecturaDatetime: json['lectura_datetime'].toString(),
+      valor: json['peticion'].toString(),
       sensor: json['sensor'] != null
           ? SensorIot.fromJson(json['sensor'])
           : null,
