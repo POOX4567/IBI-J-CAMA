@@ -220,7 +220,7 @@ class _TechnicalSupervisionScreenState
                         ),
                         const SizedBox(height: 12),
 
-                        const SupervisionHistory(),
+                        SupervisionHistory(lecturas: _lecturas),
                         const SizedBox(height: 24),
                       ],
                     ),
