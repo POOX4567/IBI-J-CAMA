@@ -91,7 +91,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
   }
 
   // ============================================================
-  // ASISTENCIAS
+  // ASISTENCIAS (SOLO LECTURA)
   // ============================================================
   Future<void> _cargarAsistencias() async {
     try {
@@ -121,82 +121,8 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     }
   }
 
-  Future<void> _registrarAsistencia(String tipo) async {
-    try {
-      final token = await _getToken();
-
-      final response = await http.post(
-        Uri.parse('$_baseUrl/attendance'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({'user_id': widget.empleado.id, 'type': tipo}),
-      );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        if (data['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ ${tipo} registrada correctamente'),
-              backgroundColor: const Color(0xFF2E7D32),
-            ),
-          );
-          await _cargarAsistencias();
-        } else {
-          throw Exception(data['message'] ?? 'Error al registrar');
-        }
-      } else {
-        throw Exception('Error ${response.statusCode}');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  void _mostrarDialogoAsistencia() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Registrar Asistencia'),
-          content: const Text('¿Qué tipo de registro deseas hacer?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _registrarAsistencia('Entrada');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-              ),
-              child: const Text('Entrada'),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _registrarAsistencia('Salida');
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Salida'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   // ============================================================
-  // ACTIVIDADES
+  // ACTIVIDADES (SOLO LECTURA)
   // ============================================================
   Future<void> _cargarActividades() async {
     try {
@@ -224,113 +150,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
     } catch (e) {
       print('Error al cargar actividades: $e');
     }
-  }
-
-  Future<void> _registrarActividad(String actividad, String descripcion) async {
-    try {
-      final token = await _getToken();
-
-      final response = await http.post(
-        Uri.parse('$_baseUrl/activities'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({
-          'user_id': widget.empleado.id,
-          'activity': actividad,
-          'description': descripcion,
-          'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-        }),
-      );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        if (data['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Actividad registrada correctamente'),
-              backgroundColor: Color(0xFF2E7D32),
-            ),
-          );
-          await _cargarActividades();
-        } else {
-          throw Exception(data['message'] ?? 'Error al registrar');
-        }
-      } else {
-        throw Exception('Error ${response.statusCode}');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  void _mostrarDialogoActividad() {
-    final TextEditingController actividadController = TextEditingController();
-    final TextEditingController descripcionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Registrar Actividad'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: actividadController,
-                decoration: const InputDecoration(
-                  labelText: 'Actividad',
-                  hintText: 'Ej: Supervisión de cultivos',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descripcionController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Descripción',
-                  hintText: 'Describe la actividad realizada...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (actividadController.text.isNotEmpty) {
-                  Navigator.pop(context);
-                  _registrarActividad(
-                    actividadController.text,
-                    descripcionController.text,
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('El campo actividad es obligatorio'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-              ),
-              child: const Text('Registrar'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   // ============================================================
@@ -758,7 +577,7 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
   }
 
   // ============================================================
-  // TAB: ASISTENCIAS
+  // TAB: ASISTENCIAS (SOLO HISTORIAL)
   // ============================================================
   Widget _buildAsistenciasTab() {
     final estadisticas = _getEstadisticasAsistencia();
@@ -833,25 +652,6 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Botón para registrar asistencia
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _mostrarDialogoAsistencia,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Registrar Asistencia'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -966,31 +766,12 @@ class _EmpleadoDetailScreenState extends State<EmpleadoDetailScreen> {
   }
 
   // ============================================================
-  // TAB: ACTIVIDADES
+  // TAB: ACTIVIDADES (SOLO HISTORIAL)
   // ============================================================
   Widget _buildActividadesTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Botón para registrar actividad
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _mostrarDialogoActividad,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Registrar Actividad'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-
         const Text(
           'ACTIVIDADES REALIZADAS',
           style: TextStyle(

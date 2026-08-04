@@ -1,7 +1,13 @@
 import 'dart:async'; // Necesario para el StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // El nuevo plugin
-import 'package:ibi/data/mock_data.dart';
+
+// --- NUEVOS MODELOS Y SERVICIOS ---
+import 'package:ibi/models/sensor_iot_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
+import 'package:ibi/models/lectura_sensor_model.dart';
+import 'package:ibi/models/invernadero_model.dart';
+import 'package:ibi/services/supervision_service.dart';
 
 // Importaciones seguras y absolutas
 import 'package:ibi/widgets/technical_supervision_widgets/supervision_header.dart';
@@ -26,11 +32,54 @@ class _TechnicalSupervisionScreenState
   // 1. Declaramos la variable para guardar la suscripción al monitor de red
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
+  // --- VARIABLES DE LA API ---
+  final SupervisionService _apiService = SupervisionService();
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  List<SensorIot> _sensores = [];
+  List<ElementoEstado> _elementos = [];
+  List<LecturaSensor> _lecturas = [];
+  List<Invernadero> _invernaderos = [];
+
   @override
   void initState() {
     super.initState();
     // 2. Iniciamos el monitoreo justo cuando la pantalla se abre
     _iniciarMonitoreoDeRed();
+    // 3. Cargamos los datos reales desde la API
+    _cargarDatosAPI();
+  }
+
+  // --- FUNCIÓN PARA TRAER LOS DATOS DE LA API ---
+  Future<void> _cargarDatosAPI() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      // Future.wait permite hacer todas las peticiones HTTP al mismo tiempo
+      final resultados = await Future.wait([
+        _apiService.getSensores(),
+        _apiService.getElementos(),
+        _apiService.getLecturas(),
+        _apiService.getInvernaderos(),
+      ]);
+
+      setState(() {
+        _sensores = resultados[0] as List<SensorIot>;
+        _elementos = resultados[1] as List<ElementoEstado>;
+        _lecturas = resultados[2] as List<LecturaSensor>;
+        _invernaderos = resultados[3] as List<Invernadero>;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error al conectar con el servidor: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   void _iniciarMonitoreoDeRed() {
@@ -43,6 +92,10 @@ class _TechnicalSupervisionScreenState
       } else {
         // Si hay WiFi o Datos Móviles, ocultamos la alerta
         _mostrarAlertaSinConexion(false);
+        // Opcional: Recargar datos automáticamente si regresa la conexión y estaban vacíos
+        if (_sensores.isEmpty && _elementos.isEmpty && !_isLoading) {
+          _cargarDatosAPI();
+        }
       }
     });
   }
@@ -77,7 +130,7 @@ class _TechnicalSupervisionScreenState
 
   @override
   void dispose() {
-    // 3. ¡Paso crítico! Cancelamos la suscripción cuando el usuario sale de esta pantalla
+    // Cancelamos la suscripción cuando el usuario sale de esta pantalla
     // para evitar que la app consuma batería o memoria innecesariamente.
     _connectivitySubscription?.cancel();
     super.dispose();
@@ -85,44 +138,93 @@ class _TechnicalSupervisionScreenState
 
   @override
   Widget build(BuildContext context) {
-    // Filtramos la lista de dispositivos IoT basándonos en el dropdown seleccionado
-    final filteredDevices = mockIotDevices.where((device) {
+    // Manejo del estado de Error en la pantalla
+    if (!_isLoading && _errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 60),
+            const SizedBox(height: 16),
+            Text(_errorMessage, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _cargarDatosAPI,
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Filtramos sensores y elementos según el filtro seleccionado
+    final filteredSensores = _sensores.where((sensor) {
       if (deviceFilter == "todos") return true;
-      return device.status == deviceFilter;
+      return sensor.estadoId.toString() == deviceFilter;
+    }).toList();
+
+    final filteredElementos = _elementos.where((elemento) {
+      if (deviceFilter == "todos") return true;
+      return elemento.estadoId.toString() == deviceFilter;
     }).toList();
 
     return Column(
       children: [
-        // Encabezado superior fijo
-        SupervisionHeader(totalDevices: mockIotDevices.length),
+        // Encabezado superior fijo (sumamos sensores y elementos)
+        SupervisionHeader(
+          totalDevices: _isLoading ? 0 : (_sensores.length + _elementos.length),
+        ),
 
-        // Contenido con scroll envuelto en un Expanded
+        // Contenido con scroll envuelto en un Expanded y un RefreshIndicator
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SupervisionStatsGrid(devices: mockIotDevices),
-                const SizedBox(height: 12),
+          child: RefreshIndicator(
+            onRefresh: _cargarDatosAPI,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    physics:
+                        const AlwaysScrollableScrollPhysics(), // Necesario para el RefreshIndicator
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SupervisionStatsGrid(
+                          sensores: _sensores,
+                          elementos: _elementos,
+                        ),
+                        const SizedBox(height: 12),
 
-                SupervisionDeviceList(
-                  devices: filteredDevices,
-                  currentFilter: deviceFilter,
-                  onFilterChanged: (val) => setState(() => deviceFilter = val),
-                ),
-                const SizedBox(height: 12),
+                        SupervisionDeviceList(
+                          devices: filteredSensores,
+                          elementos: filteredElementos,
+                          lecturas: _lecturas,
+                          // Si hay al menos un invernadero, enviamos el primero para usar sus coordenadas
+                          invernaderoActual: _invernaderos.isNotEmpty
+                              ? _invernaderos.first
+                              : null,
+                          currentFilter: deviceFilter,
+                          onFilterChanged: (val) =>
+                              setState(() => deviceFilter = val),
+                        ),
+                        const SizedBox(height: 12),
 
-                const SupervisionFailureChart(),
-                const SizedBox(height: 12),
+                        SupervisionFailureChart(
+                          sensores: _sensores,
+                          elementos: _elementos,
+                        ),
+                        const SizedBox(height: 12),
 
-                const SupervisionPerformance(),
-                const SizedBox(height: 12),
+                        SupervisionPerformance(
+                          sensores: _sensores,
+                          elementos: _elementos,
+                        ),
+                        const SizedBox(height: 12),
 
-                const SupervisionHistory(),
-                const SizedBox(height: 24),
-              ],
-            ),
+                        SupervisionHistory(lecturas: _lecturas),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ],

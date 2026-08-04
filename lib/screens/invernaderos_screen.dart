@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 class InvernaderosScreen extends StatelessWidget {
   const InvernaderosScreen({super.key});
 
@@ -73,81 +72,78 @@ class InvernaderosScreen extends StatelessWidget {
             ),
 
             Container(
-  height: 250,
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Humedad promedio semanal',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-
-      const SizedBox(height: 20),
-
-      Expanded(
-        child: LineChart(
-          LineChartData(
-            gridData: const FlGridData(show: true),
-
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(showTitles: true),
+              height: 250,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    const dias = [
-                      'L',
-                      'M',
-                      'M',
-                      'J',
-                      'V',
-                      'S',
-                      'D'
-                    ];
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Humedad promedio semanal',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
 
-                    if (value.toInt() >= 0 &&
-                        value.toInt() < dias.length) {
-                      return Text(dias[value.toInt()]);
-                    }
+                  const SizedBox(height: 20),
 
-                    return const Text('');
-                  },
-                ),
-              ),
-            ),
+                  Expanded(
+                    child: LineChart(
+                      LineChartData(
+                        gridData: const FlGridData(show: true),
 
-            borderData: FlBorderData(show: true),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: true),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                const dias = [
+                                  'L',
+                                  'M',
+                                  'M',
+                                  'J',
+                                  'V',
+                                  'S',
+                                  'D',
+                                ];
 
-            lineBarsData: [
-              LineChartBarData(
-                isCurved: true,
-                spots: const [
-                  FlSpot(0, 45),
-                  FlSpot(1, 50),
-                  FlSpot(2, 47),
-                  FlSpot(3, 60),
-                  FlSpot(4, 55),
-                  FlSpot(5, 62),
-                  FlSpot(6, 58),
+                                if (value.toInt() >= 0 &&
+                                    value.toInt() < dias.length) {
+                                  return Text(dias[value.toInt()]);
+                                }
+
+                                return const Text('');
+                              },
+                            ),
+                          ),
+                        ),
+
+                        borderData: FlBorderData(show: true),
+
+                        lineBarsData: [
+                          LineChartBarData(
+                            isCurved: true,
+                            spots: const [
+                              FlSpot(0, 45),
+                              FlSpot(1, 50),
+                              FlSpot(2, 47),
+                              FlSpot(3, 60),
+                              FlSpot(4, 55),
+                              FlSpot(5, 62),
+                              FlSpot(6, 58),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  ),
-),
+            ),
 
             const SizedBox(height: 22),
 
@@ -177,9 +173,30 @@ class InvernaderosScreen extends StatelessWidget {
                   status: 'Estable',
                   statusColor: primaryGreen,
                   beds: const [
-                    _BedData('Cama 1', 'Jícama', '26.5°C', '45%', 'Estable', primaryGreen),
-                    _BedData('Cama 2', 'Jícama', '27.1°C', '48%', 'Estable', primaryGreen),
-                    _BedData('Cama 3', 'Tomate', '29.4°C', '35%', 'Advertencia', warning),
+                    _BedData(
+                      'Cama 1',
+                      'Jícama',
+                      '26.5°C',
+                      '45%',
+                      'Estable',
+                      primaryGreen,
+                    ),
+                    _BedData(
+                      'Cama 2',
+                      'Jícama',
+                      '27.1°C',
+                      '48%',
+                      'Estable',
+                      primaryGreen,
+                    ),
+                    _BedData(
+                      'Cama 3',
+                      'Tomate',
+                      '29.4°C',
+                      '35%',
+                      'Advertencia',
+                      warning,
+                    ),
                   ],
                   workers: const [
                     _WorkerData('Juan Pérez', '999 123 4567'),
@@ -211,14 +228,40 @@ class InvernaderosScreen extends StatelessWidget {
                   status: 'Advertencia',
                   statusColor: warning,
                   beds: const [
-                    _BedData('Cama 1', 'Jícama', '31.2°C', '32%', 'Advertencia', warning),
-                    _BedData('Cama 2', 'Jícama', '30.8°C', '34%', 'Advertencia', warning),
-                    _BedData('Cama 3', 'tomate', '28.7°C', '41%', 'Estable', primaryGreen),
-                    _BedData('Cama 4', 'Jícama', '29.9°C', '37%', 'Estable', primaryGreen),
+                    _BedData(
+                      'Cama 1',
+                      'Jícama',
+                      '31.2°C',
+                      '32%',
+                      'Advertencia',
+                      warning,
+                    ),
+                    _BedData(
+                      'Cama 2',
+                      'Jícama',
+                      '30.8°C',
+                      '34%',
+                      'Advertencia',
+                      warning,
+                    ),
+                    _BedData(
+                      'Cama 3',
+                      'tomate',
+                      '28.7°C',
+                      '41%',
+                      'Estable',
+                      primaryGreen,
+                    ),
+                    _BedData(
+                      'Cama 4',
+                      'Jícama',
+                      '29.9°C',
+                      '37%',
+                      'Estable',
+                      primaryGreen,
+                    ),
                   ],
-                  workers: const [
-                    _WorkerData('Marcos Chan', '999 555 7812'),
-                  ],
+                  workers: const [_WorkerData('Marcos Chan', '999 555 7812')],
                   logs: const [
                     'Humedad baja detectada en cama 1',
                     'Revisión pendiente de aspersores',
@@ -245,12 +288,24 @@ class InvernaderosScreen extends StatelessWidget {
                   status: 'Crítico',
                   statusColor: critical,
                   beds: const [
-                    _BedData('Cama 1', 'Jícama', '34.8°C', '25%', 'Crítico', critical),
-                    _BedData('Cama 2', 'Jícama', '33.9°C', '28%', 'Crítico', critical),
+                    _BedData(
+                      'Cama 1',
+                      'Jícama',
+                      '34.8°C',
+                      '25%',
+                      'Crítico',
+                      critical,
+                    ),
+                    _BedData(
+                      'Cama 2',
+                      'Jícama',
+                      '33.9°C',
+                      '28%',
+                      'Crítico',
+                      critical,
+                    ),
                   ],
-                  workers: const [
-                    _WorkerData('Elena Vance', '999 777 9012'),
-                  ],
+                  workers: const [_WorkerData('Elena Vance', '999 777 9012')],
                   logs: const [
                     'Alerta crítica generada',
                     'Sensor de humedad requiere revisión',
@@ -637,10 +692,7 @@ class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _StatusBadge({
-    required this.label,
-    required this.color,
-  });
+  const _StatusBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -722,8 +774,16 @@ class _BedCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _InfoLine(icon: Icons.eco, label: 'Cultivo', value: bed.crop),
-          _InfoLine(icon: Icons.thermostat, label: 'Temperatura', value: bed.temperature),
-          _InfoLine(icon: Icons.water_drop_outlined, label: 'Humedad', value: bed.humidity),
+          _InfoLine(
+            icon: Icons.thermostat,
+            label: 'Temperatura',
+            value: bed.temperature,
+          ),
+          _InfoLine(
+            icon: Icons.water_drop_outlined,
+            label: 'Humedad',
+            value: bed.humidity,
+          ),
         ],
       ),
     );
@@ -809,9 +869,24 @@ class _GeneralLogCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final logs = [
-      ['Zona B marcada en advertencia', 'Hace 15 min', Icons.warning_amber_rounded, InvernaderosScreen.warning],
-      ['Sensores actualizados en Zona A', 'Hace 30 min', Icons.sensors, InvernaderosScreen.primaryGreen],
-      ['Alerta crítica generada en Zona C', 'Hace 1 hora', Icons.error_outline, InvernaderosScreen.critical],
+      [
+        'Zona B marcada en advertencia',
+        'Hace 15 min',
+        Icons.warning_amber_rounded,
+        InvernaderosScreen.warning,
+      ],
+      [
+        'Sensores actualizados en Zona A',
+        'Hace 30 min',
+        Icons.sensors,
+        InvernaderosScreen.primaryGreen,
+      ],
+      [
+        'Alerta crítica generada en Zona C',
+        'Hace 1 hora',
+        Icons.error_outline,
+        InvernaderosScreen.critical,
+      ],
     ];
 
     return Container(
