@@ -16,7 +16,7 @@ class MaintenanceService {
   Future<List<MaintenanceModel>> fetchMaintenanceTasks() async {
     final token = await _getToken();
     final response = await http.get(
-      Uri.parse('$baseUrl/mantenimientos'),
+      Uri.parse('$baseUrl/mantenimiento'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
