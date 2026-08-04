@@ -1,28 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:geolocator/geolocator.dart'; // Importamos el plugin de geolocalización
-import 'package:ibi/data/mock_data.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:ibi/models/sensor_iot_model.dart';
+import 'package:ibi/models/invernadero_model.dart';
+import 'package:ibi/models/lectura_sensor_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
 import 'package:ibi/utils/notification_service.dart';
 import '../../utils/supervision_helpers.dart';
 
+class _DeviceDisplayData {
+  final int id;
+  final String name;
+  final String description;
+  final String typeKey;
+  final int estadoId;
+  final bool hasLectura;
+
+  _DeviceDisplayData.fromSensor(SensorIot s)
+    : id = s.id,
+      name = s.nombre,
+      description = s.descripcion,
+      typeKey = s.modelo,
+      estadoId = s.estadoId,
+      hasLectura = true;
+
+  _DeviceDisplayData.fromElemento(ElementoEstado e)
+    : id = e.id,
+      name = '${e.elemento} ${e.numero}',
+      description = e.ubicacion,
+      typeKey = e.elemento,
+      estadoId = e.estadoId,
+      hasLectura = false;
+}
+
 class SupervisionDeviceList extends StatelessWidget {
-  final List<IotDevice> devices;
+  final List<SensorIot> devices;
+  final List<ElementoEstado> elementos;
+  final List<LecturaSensor> lecturas;
+  final Invernadero? invernaderoActual;
   final String currentFilter;
   final ValueChanged<String> onFilterChanged;
 
   const SupervisionDeviceList({
     Key? key,
     required this.devices,
+    required this.elementos,
+    required this.lecturas,
+    this.invernaderoActual,
     required this.currentFilter,
     required this.onFilterChanged,
   }) : super(key: key);
 
-  // --- NUEVA FUNCIÓN DE GEOLOCALIZACIÓN ---
   Future<void> _ubicarDispositivo(
     BuildContext context,
-    IotDevice device,
+    _DeviceDisplayData device,
   ) async {
-    // 1. Mostrar un aviso visual de que estamos buscando la señal GPS
+    if (invernaderoActual == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay coordenadas del invernadero en la API.'),
+        ),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Buscando señal GPS para ubicar ${device.name}...'),
@@ -31,13 +72,11 @@ class SupervisionDeviceList extends StatelessWidget {
     );
 
     try {
-      // 2. Verificar si el servicio GPS está encendido en el teléfono
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw 'Por favor enciende el GPS del teléfono.';
       }
 
-      // 3. Verificar y pedir permisos
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -49,16 +88,13 @@ class SupervisionDeviceList extends StatelessWidget {
         throw 'Los permisos están denegados permanentemente en la configuración.';
       }
 
-      // 4. Obtener la posición actual (Tarda unos segundos)
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // 5. Coordenadas ficticias del invernadero o dispositivo (Ejemplo genérico)
-      double latDispositivo = 20.8333;
-      double lngDispositivo = -89.9833;
+      double latDispositivo = invernaderoActual!.latitud;
+      double lngDispositivo = invernaderoActual!.longitud;
 
-      // 6. Calcular distancia real en metros
       double distanciaMetros = Geolocator.distanceBetween(
         position.latitude,
         position.longitude,
@@ -66,10 +102,8 @@ class SupervisionDeviceList extends StatelessWidget {
         lngDispositivo,
       );
 
-      // Convertimos a kilómetros con 2 decimales
       String distanciaKm = (distanciaMetros / 1000).toStringAsFixed(2);
 
-      // Verificamos que el widget siga montado antes de mostrar el resultado
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,7 +112,9 @@ class SupervisionDeviceList extends StatelessWidget {
             children: [
               const Icon(LucideIcons.mapPin, color: Colors.white),
               const SizedBox(width: 8),
-              Text('📍 Estás a $distanciaKm km del dispositivo'),
+              Text(
+                '📌 Estás a $distanciaKm km del ${invernaderoActual!.nombre}',
+              ),
             ],
           ),
           backgroundColor: Colors.green[800],
@@ -93,8 +129,31 @@ class SupervisionDeviceList extends StatelessWidget {
     }
   }
 
+  String _mapEstadoIdToString(int estadoId) {
+    switch (estadoId) {
+      case 1:
+        return 'operativo';
+      case 2:
+        return 'inactivo';
+      case 3:
+        return 'falla';
+      case 4:
+        return 'mantenimiento';
+      default:
+        return 'desconocido';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final sensoresData = devices
+        .map((d) => _DeviceDisplayData.fromSensor(d))
+        .toList();
+    final elementosData = elementos
+        .map((e) => _DeviceDisplayData.fromElemento(e))
+        .toList();
+    final allDevices = [...sensoresData, ...elementosData];
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -121,22 +180,22 @@ class SupervisionDeviceList extends StatelessWidget {
                     child: Text("Todos", style: TextStyle(fontSize: 12)),
                   ),
                   DropdownMenuItem(
-                    value: "operativo",
+                    value: "1",
                     child: Text("Operativos", style: TextStyle(fontSize: 12)),
                   ),
                   DropdownMenuItem(
-                    value: "falla",
+                    value: "3",
                     child: Text("Fallas", style: TextStyle(fontSize: 12)),
                   ),
                   DropdownMenuItem(
-                    value: "mantenimiento",
+                    value: "4",
                     child: Text(
                       "Mantenimiento",
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
                   DropdownMenuItem(
-                    value: "inactivo",
+                    value: "2",
                     child: Text("Inactivos", style: TextStyle(fontSize: 12)),
                   ),
                 ],
@@ -150,10 +209,17 @@ class SupervisionDeviceList extends StatelessWidget {
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: devices.length,
+            itemCount: allDevices.length,
             itemBuilder: (context, index) {
-              final device = devices[index];
-              final status = SupervisionHelpers.getStatusBadge(device.status);
+              final device = allDevices[index];
+              final statusString = _mapEstadoIdToString(device.estadoId);
+              final status = SupervisionHelpers.getStatusBadge(statusString);
+
+              final LecturaSensor? lecturaAsociada = device.hasLectura
+                  ? lecturas
+                      .where((l) => l.sensorId == device.id)
+                      .firstOrNull
+                  : null;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -165,7 +231,7 @@ class SupervisionDeviceList extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      SupervisionHelpers.getDeviceTypeIcon(device.type),
+                      SupervisionHelpers.getDeviceTypeIcon(device.typeKey),
                       size: 20,
                       color: Colors.blueGrey,
                     ),
@@ -183,20 +249,33 @@ class SupervisionDeviceList extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            device.greenhouse,
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 11,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  device.description,
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 11,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (lecturaAsociada != null)
+                                Text(
+                                  "Val: ${lecturaAsociada.valor}",
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-
-                    // --- NUEVO BOTÓN DE UBICACIÓN ---
                     IconButton(
                       icon: const Icon(
                         LucideIcons.mapPin,
@@ -216,12 +295,10 @@ class SupervisionDeviceList extends StatelessWidget {
                         color: Colors.red,
                       ),
                       onPressed: () async {
-                        // 1. Pedimos permiso (solo sale la ventana la primera vez)
                         await NotificationService.solicitarPermisos();
-                        // 2. Disparamos la alerta
                         await NotificationService.mostrarAlertaFalla(
                           device.name,
-                          device.greenhouse,
+                          device.description,
                         );
                       },
                       tooltip: "Simular Alerta Crítica",
@@ -250,30 +327,6 @@ class SupervisionDeviceList extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (device.batteryLevel != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                device.batteryLevel! < 20
-                                    ? LucideIcons.batteryMedium
-                                    : LucideIcons.batteryFull,
-                                size: 10,
-                                color: device.batteryLevel! < 20
-                                    ? Colors.red
-                                    : Colors.green,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                "${device.batteryLevel}%",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
                   ],

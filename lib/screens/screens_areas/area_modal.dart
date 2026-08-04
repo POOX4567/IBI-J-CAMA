@@ -19,6 +19,14 @@ import 'area_provider.dart';
 /// el formulario. Si aún no lo están, muestra un loader breve mientras
 /// llegan de la API, en vez de abrir el modal con los dropdowns vacíos
 /// (que era la causa de que "no cargaran los empleados").
+///
+/// 👇 CAMBIO NUEVO (progreso): el backend valida `progreso` como un
+/// número ENTRE 0 Y 1 ("The progreso field must not be greater than
+/// 1"), así que el Slider (que ya trabaja en 0.0-1.0) se manda TAL
+/// CUAL, sin multiplicar por 100. Antes se mandaba `progreso * 100`,
+/// lo cual disparaba un 422 en el POST y la creación NUNCA se
+/// completaba (por eso seguías viendo solo el registro viejo "Sin
+/// área").
 Future<void> mostrarModalNuevaArea(
   BuildContext context,
   AreaProvider provider,
@@ -60,9 +68,9 @@ Future<void> mostrarModalNuevaArea(
   Map<String, dynamic>? cultivoSeleccionado;
   String actividadTexto = '';
   String estadoSeleccionado = 'Pendiente';
-  // El Slider trabaja internamente en 0.0-1.0, pero la base de datos
-  // guarda el progreso como ENTERO 0-100. La conversión se hace justo
-  // antes de enviar el Area al provider (ver `guardar()` más abajo).
+  // El Slider trabaja internamente en 0.0-1.0, y el backend TAMBIÉN
+  // espera 0.0-1.0 (valida `progreso <= 1`). Ya no hace falta ninguna
+  // conversión antes de enviarlo.
   double progreso = 0.0;
   bool guardando = false;
 
@@ -95,8 +103,10 @@ Future<void> mostrarModalNuevaArea(
               cultivo: cultivoSeleccionado!['name'],
               actividad: actividadTexto.trim(),
               estado: estadoSeleccionado,
-              // CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
-              progreso: (progreso * 100).round().toDouble(),
+              // ✅ SIN conversión: el backend espera 0.0-1.0, igual que
+              // el Slider. Antes era `(progreso * 100).round().toDouble()`
+              // y eso disparaba un 422 ("must not be greater than 1").
+              progreso: progreso,
             );
 
             final exito = await provider.agregarArea(nuevaArea);
@@ -105,6 +115,15 @@ Future<void> mostrarModalNuevaArea(
 
             if (exito && context.mounted) {
               Navigator.pop(context);
+            } else if (context.mounted) {
+              // 👇 Feedback visible si el backend rechaza la creación
+              // (por ejemplo, otro error de validación 422/500). Antes
+              // el modal se quedaba "quieto" sin avisar qué pasó.
+              Fluttertoast.showToast(
+                msg: provider.error ?? 'Error al crear el área',
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+              );
             }
           }
 
@@ -468,6 +487,14 @@ Future<void> mostrarModalNuevaArea(
 ///
 /// 👇 Mismo cambio que en `mostrarModalNuevaArea`: se asegura de que los
 /// datos de los dropdowns estén cargados antes de construir el formulario.
+///
+/// 👇 CAMBIO NUEVO (progreso): igual que al crear, el Slider ahora
+/// SIEMPRE trabaja y envía en escala 0.0-1.0 porque así lo exige el
+/// backend. Como `area.progreso` puede venir en 0-100 (registros viejos
+/// creados antes de este fix) o en 0.0-1.0 (registros nuevos), se
+/// normaliza al cargar el formulario para que el Slider siempre
+/// arranque en el valor correcto sin importar cómo haya quedado
+/// guardado el registro original.
 Future<void> mostrarModalEditarArea(
   BuildContext context,
   AreaProvider provider,
@@ -521,12 +548,14 @@ Future<void> mostrarModalEditarArea(
     area.cultivo,
   );
   String estadoSeleccionado = area.estado;
-  // ── CONVERSIÓN CONSISTENTE DE PROGRESO ─────────────────────────────
-  // La base de datos guarda `progreso` como ENTERO 0-100 (por eso aquí
-  // dividimos entre 100 para obtener el 0.0-1.0 que necesita el Slider).
-  // Al guardar (más abajo, en `guardar()`) se hace la conversión inversa
-  // (progreso * 100) para que en la BD siempre quede como entero.
-  double progreso = (area.progreso / 100).clamp(0.0, 1.0);
+
+  // ── NORMALIZACIÓN DE PROGRESO AL CARGAR ────────────────────────────
+  // Si `area.progreso` viene mayor a 1 (ej. 45, 100), asumimos que es
+  // un registro viejo guardado en escala 0-100 y lo convertimos a
+  // 0.0-1.0 para el Slider. Si ya viene <= 1, se usa tal cual.
+  double progreso = area.progreso > 1
+      ? (area.progreso / 100).clamp(0.0, 1.0)
+      : area.progreso.clamp(0.0, 1.0);
   bool guardando = false;
 
   final actividadCtrl = TextEditingController(text: area.actividad);
@@ -561,8 +590,10 @@ Future<void> mostrarModalEditarArea(
               cultivo: cultivoSeleccionado!['name'],
               actividad: actividadCtrl.text.trim(),
               estado: estadoSeleccionado,
-              // CONVERSIÓN: el slider da 0.0-1.0, la BD espera 0-100.
-              progreso: (progreso * 100).round().toDouble(),
+              // ✅ SIN conversión: el backend espera 0.0-1.0. Antes era
+              // `(progreso * 100).round().toDouble()` y provocaba el
+              // mismo 422 ("must not be greater than 1") al editar.
+              progreso: progreso,
             );
 
             final exito = await provider.actualizarArea(

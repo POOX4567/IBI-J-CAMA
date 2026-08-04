@@ -89,13 +89,75 @@ class AreaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Relleno de nombres por ID ───────────────────────────────────────
+  // El backend a veces no manda las relaciones ('invernadero', 'cultivo',
+  // 'empleado') embebidas en /areas, así que Area.fromJson cae en sus
+  // valores por defecto ('Sin área', 'Sin cultivo', 'Sin asignar').
+  // Estas funciones cruzan por ID contra las listas de dropdowns
+  // (empleados, areasDisponibles, cultivos) que YA cargamos para el
+  // formulario, y rellenan el nombre real si lo encuentran.
+  String? _buscarNombrePorId(List<Map<String, dynamic>> lista, int? id) {
+    if (id == null) return null;
+    final match = lista.firstWhere(
+      (e) => '${e['id']}' == '$id',
+      orElse: () => {},
+    );
+    if (match.isNotEmpty && match['name'] != null) {
+      final nombre = match['name'].toString().trim();
+      if (nombre.isNotEmpty) return nombre;
+    }
+    return null;
+  }
+
+  List<Area> _rellenarNombres(List<Area> lista) {
+    if (empleados.isEmpty && areasDisponibles.isEmpty && cultivos.isEmpty) {
+      return lista;
+    }
+    return lista.map((a) {
+      String? nuevoEmpleado;
+      String? nuevaArea;
+      String? nuevoCultivo;
+
+      final necesitaEmpleado =
+          a.empleado.isEmpty || a.empleado == 'Sin asignar';
+      final necesitaArea = a.area.isEmpty || a.area == 'Sin área';
+      final necesitaCultivo = a.cultivo.isEmpty || a.cultivo == 'Sin cultivo';
+
+      if (necesitaEmpleado) {
+        nuevoEmpleado = _buscarNombrePorId(empleados, a.empleadoId);
+      }
+      if (necesitaArea) {
+        nuevaArea = _buscarNombrePorId(areasDisponibles, a.areaId);
+      }
+      if (necesitaCultivo) {
+        nuevoCultivo = _buscarNombrePorId(cultivos, a.cultivoId);
+      }
+
+      if (nuevoEmpleado == null && nuevaArea == null && nuevoCultivo == null) {
+        return a;
+      }
+
+      return a.copyWith(
+        empleado: nuevoEmpleado ?? a.empleado,
+        area: nuevaArea ?? a.area,
+        cultivo: nuevoCultivo ?? a.cultivo,
+      );
+    }).toList();
+  }
+
   // ── GET /areas ────────────────────────────────────────────────────
   Future<void> cargarAreas() async {
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      _areas = await _service.obtenerAreas();
+      // Nos aseguramos de tener los catálogos (empleados/áreas/cultivos)
+      // ANTES de rellenar nombres, si aún no se han cargado.
+      if (!datosFormularioCargados && !cargandoDatosFormulario) {
+        await cargarDatosDeFormulario();
+      }
+      final lista = await _service.obtenerAreas();
+      _areas = _rellenarNombres(lista);
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
@@ -150,7 +212,8 @@ class AreaProvider extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     try {
-      _historial = await _service.obtenerHistorial();
+      final lista = await _service.obtenerHistorial();
+      _historial = _rellenarNombres(lista);
     } catch (e) {
       error = e.toString();
       _log('cargarHistorial', e);
@@ -163,7 +226,8 @@ class AreaProvider extends ChangeNotifier {
   Future<bool> agregarArea(Area a) async {
     try {
       final creada = await _service.crearArea(a);
-      _areas.add(creada);
+      final rellenada = _rellenarNombres([creada]).first;
+      _areas.add(rellenada);
       notifyListeners();
       return true;
     } catch (e) {
@@ -202,8 +266,9 @@ class AreaProvider extends ChangeNotifier {
   Future<bool> actualizarArea(int id, Area area) async {
     try {
       final actualizada = await _service.actualizarArea(id, area);
+      final rellenada = _rellenarNombres([actualizada]).first;
       final i = _areas.indexWhere((a) => a.id == id);
-      if (i != -1) _areas[i] = actualizada;
+      if (i != -1) _areas[i] = rellenada;
       notifyListeners();
       return true;
     } catch (e) {
@@ -218,8 +283,9 @@ class AreaProvider extends ChangeNotifier {
   Future<bool> actualizarProgreso(int id, double progreso) async {
     try {
       final actualizada = await _service.actualizarProgreso(id, progreso);
+      final rellenada = _rellenarNombres([actualizada]).first;
       final i = _areas.indexWhere((a) => a.id == id);
-      if (i != -1) _areas[i] = actualizada;
+      if (i != -1) _areas[i] = rellenada;
       notifyListeners();
       return true;
     } catch (e) {
@@ -234,8 +300,9 @@ class AreaProvider extends ChangeNotifier {
   Future<bool> actualizarEstado(int id, String estado) async {
     try {
       final actualizada = await _service.actualizarEstado(id, estado);
+      final rellenada = _rellenarNombres([actualizada]).first;
       final i = _areas.indexWhere((a) => a.id == id);
-      if (i != -1) _areas[i] = actualizada;
+      if (i != -1) _areas[i] = rellenada;
       notifyListeners();
       return true;
     } catch (e) {
@@ -313,6 +380,10 @@ class AreaProvider extends ChangeNotifier {
   /// Expone `cargandoDatosFormulario` para que la UI (el modal) pueda
   /// mostrar un loader mientras espera, en vez de abrirse con los
   /// dropdowns vacíos.
+  ///
+  /// 👇 Además, una vez cargados los catálogos, vuelve a rellenar los
+  /// nombres de las áreas ya cargadas (`_areas`) por si llegaron antes
+  /// que este método terminara.
   Future<void> cargarDatosDeFormulario({bool forzar = false}) async {
     if (cargandoDatosFormulario) return;
     if (datosFormularioCargados && !forzar) return;
@@ -325,6 +396,12 @@ class AreaProvider extends ChangeNotifier {
       cargarAreasDisponiblesParaFormulario(),
       cargarCultivosDisponibles(),
     ]);
+
+    // Si ya había áreas cargadas sin nombre, las rellenamos ahora
+    // que tenemos los catálogos disponibles.
+    if (_areas.isNotEmpty) {
+      _areas = _rellenarNombres(_areas);
+    }
 
     cargandoDatosFormulario = false;
     datosFormularioCargados = true;

@@ -1,44 +1,127 @@
-import 'dart:async';
-import 'package:ibi/models/maintenance_model.dart'; // Cambia 'ibi' por el name de tu app
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/maintenance_model.dart';
+import '../models/invernadero_model.dart';
 
 class MaintenanceService {
+  static const String baseUrl = 'https://ibijicama.utptics.com/api';
+
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  Future<String?> _getToken() async {
+    return await _storage.read(key: 'token');
+  }
+
   Future<List<MaintenanceModel>> fetchMaintenanceTasks() async {
-    // Simulando consulta a la base de datos (1.2 segundos de delay)
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/mantenimiento'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
-    final List<Map<String, dynamic>> rawData = [
-      {
-        "title": "Falla en sistema eléctrico",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Invernadero Norte",
-      },
-      {
-        "title": "Sensor de humedad desconectado",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Sur",
-      },
-      {
-        "title": "Fuga de agua detectada",
-        "severity": "Alta",
-        "status": "Abierto",
-        "area": "Zona de riego",
-      },
-      {
-        "title": "Mantenimiento preventivo",
-        "severity": "Baja",
-        "status": "Resuelto",
-        "area": "Área general",
-      },
-      {
-        "title": "Temperatura fuera de rango",
-        "severity": "Media",
-        "status": "En proceso",
-        "area": "Invernadero Este",
-      },
-    ];
+    if (response.statusCode == 200) {
+      List<dynamic> body = jsonDecode(response.body);
+      return body.map((json) => MaintenanceModel.fromJson(json)).toList();
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
 
-    return rawData.map((json) => MaintenanceModel.fromMap(json)).toList();
+  Future<MaintenanceModel> createMaintenance({
+    required String titulo,
+    required String descripcion,
+    required String tipo,
+    required int invernaderoId,
+  }) async {
+    final token = await _getToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/mantenimiento'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'titulo': titulo,
+        'descripcion': descripcion,
+        'tipo': tipo,
+        'invernadero_id': invernaderoId,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final decoded = jsonDecode(response.body);
+      return MaintenanceModel.fromJson(decoded);
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
+
+  Future<List<Invernadero>> fetchInvernaderos() async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/invernaderos'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        List<dynamic> data = decoded['data'];
+        return data.map((json) => Invernadero.fromJson(json)).toList();
+      } else {
+        throw Exception(
+          decoded['message'] ?? 'Fallo al cargar los invernaderos',
+        );
+      }
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
+
+  Future<MaintenanceModel> updateMaintenance({
+    required int id,
+    required String titulo,
+    required String descripcion,
+    required int invernaderoId,
+  }) async {
+    final token = await _getToken();
+    final response = await http.put(
+      Uri.parse('$baseUrl/mantenimiento/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'titulo': titulo,
+        'descripcion': descripcion,
+        'invernadero_id': invernaderoId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      return MaintenanceModel.fromJson(decoded);
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
   }
 }

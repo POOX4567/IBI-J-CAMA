@@ -5,6 +5,7 @@ class MaintenanceHelpers {
   static Map<String, dynamic> getPriorityBadge(String priority) {
     switch (priority) {
       case "alta":
+      case "Correctivo":
         return {
           'bg': Colors.red[100],
           'text': Colors.red[800],
@@ -19,6 +20,7 @@ class MaintenanceHelpers {
           'label': 'MEDIA',
         };
       case "baja":
+      case "Preventivo":
         return {
           'bg': Colors.green[100],
           'text': Colors.green[800],
@@ -38,6 +40,7 @@ class MaintenanceHelpers {
   static Map<String, dynamic> getStatusBadge(String status) {
     switch (status) {
       case "pendiente":
+      case "Pendiente":
         return {
           'icon': LucideIcons.clock,
           'bg': Colors.orange[100],
@@ -46,6 +49,7 @@ class MaintenanceHelpers {
           'label': 'Pendiente',
         };
       case "en_progreso":
+      case "En proceso":
         return {
           'icon': LucideIcons.alertCircle,
           'bg': Colors.blue[100],
@@ -54,6 +58,7 @@ class MaintenanceHelpers {
           'label': 'En Progreso',
         };
       case "completada":
+      case "Resuelto":
         return {
           'icon': LucideIcons.checkCircle,
           'bg': Colors.green[100],

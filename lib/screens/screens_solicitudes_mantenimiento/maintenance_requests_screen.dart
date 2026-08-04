@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ibi/services/maintenance_service.dart';
 
-// Importaciones de tus widgets modulares
 import '../../widgets/maintenance_requests_widgets/maintenance_header.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_card.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_stats_grid.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_search_filter.dart';
+import '../../widgets/maintenance_requests_widgets/create_maintenance_sheet.dart';
+import '../../widgets/maintenance_requests_widgets/edit_maintenance_sheet.dart';
 
 class MaintenanceRequestsScreen extends StatefulWidget {
   const MaintenanceRequestsScreen({Key? key}) : super(key: key);
@@ -26,19 +28,43 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
   final ImagePicker _picker = ImagePicker();
   final Map<String, File> _requestImages = {};
 
+  final MaintenanceService _service = MaintenanceService();
+  List<MaintenanceRequest> _requests = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
-    _cargarFiltroGuardado(); // Leemos el filtro al abrir la pantalla
+    _cargarFiltroGuardado();
+    _cargarSolicitudes();
   }
 
-  // --- NUEVAS FUNCIONES PARA SHARED PREFERENCES ---
+  Future<void> _cargarSolicitudes() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final modelos = await _service.fetchMaintenanceTasks();
+      setState(() {
+        _requests = modelos
+            .map((m) => MaintenanceRequest.fromMaintenanceModel(m))
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error al conectar con el servidor: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   Future<void> _cargarFiltroGuardado() async {
     final prefs = await SharedPreferences.getInstance();
-    // Busca la llave 'filtro_mantenimiento'. Si no existe, usa 'todas' por defecto.
     final filtroGuardado = prefs.getString('filtro_mantenimiento') ?? "todas";
-
     setState(() {
       filter = filtroGuardado;
     });
@@ -46,11 +72,9 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
 
   Future<void> _guardarFiltro(String nuevoFiltro) async {
     final prefs = await SharedPreferences.getInstance();
-    // Sobrescribe el valor en la memoria del teléfono
     await prefs.setString('filtro_mantenimiento', nuevoFiltro);
   }
 
-  // Método encargado de gestionar la captura/selección de imágenes
   Future<void> _pickImage(MaintenanceRequest req, ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
@@ -69,8 +93,43 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Filtrado de las solicitudes basado en la barra de búsqueda y el dropdown
-    final filteredRequests = mockMaintenanceRequests.where((request) {
+    if (_isLoading) {
+      return const Column(
+        children: [
+          MaintenanceHeader(totalRequests: 0),
+          Expanded(
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ],
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Column(
+        children: [
+          MaintenanceHeader(totalRequests: 0),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 12),
+                  Text(_errorMessage!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _cargarSolicitudes,
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final filteredRequests = _requests.where((request) {
       final matchesFilter = filter == "todas" || request.status == filter;
       final matchesSearch =
           request.title.toLowerCase().contains(searchTerm.toLowerCase()) ||
@@ -79,70 +138,102 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
       return matchesFilter && matchesSearch;
     }).toList();
 
-    return Column(
+    return Stack(
       children: [
-        // 1. Encabezado estático superior
-        MaintenanceHeader(totalRequests: mockMaintenanceRequests.length),
-
-        // 2. Contenido con scroll envuelto en un Expanded
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Cuadrícula de estadísticas modularizada
-                MaintenanceStatsGrid(requests: mockMaintenanceRequests),
-                const SizedBox(height: 12),
-
-                // Barra de búsqueda y filtros modularizada
-                MaintenanceSearchFilter(
-                  searchController: _searchController,
-                  currentFilter: filter,
-                  onSearchChanged: (val) => setState(() => searchTerm = val),
-                  onFilterChanged: (val) {
-                    setState(() => filter = val); // 1. Actualiza la UI
-                    _guardarFiltro(val); // 2. Guarda en la memoria del teléfono
-                  },
+        Column(
+          children: [
+            MaintenanceHeader(totalRequests: _requests.length),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MaintenanceStatsGrid(requests: _requests),
+                    const SizedBox(height: 12),
+                    MaintenanceSearchFilter(
+                      searchController: _searchController,
+                      currentFilter: filter,
+                      onSearchChanged: (val) => setState(() => searchTerm = val),
+                      onFilterChanged: (val) {
+                        setState(() => filter = val);
+                        _guardarFiltro(val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (filteredRequests.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Text(
+                          "No se encontraron solicitudes",
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                      )
+                    else
+                      ...filteredRequests.map((req) {
+                        return MaintenanceCard(
+                          request: req,
+                          isExpanded: expandedCardId == req.id,
+                          image: _requestImages[req.id],
+                          onToggleExpand: () => setState(
+                            () => expandedCardId = expandedCardId == req.id
+                                ? null
+                                : req.id,
+                          ),
+                          onPickImage: (source) => _pickImage(req, source),
+                          onRemoveImage: () =>
+                              setState(() => _requestImages.remove(req.id)),
+                          onStateUpdated: () => setState(() {}),
+                          onEditRequested: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                              ),
+                              builder: (ctx) => EditMaintenanceSheet(
+                                service: _service,
+                                request: req,
+                                onSaved: _cargarSolicitudes,
+                              ),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    const SizedBox(height: 70),
+                  ],
                 ),
-                const SizedBox(height: 12),
-
-                // Listado de tarjetas de solicitudes o mensaje de lista vacía
-                if (filteredRequests.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(
-                      "No se encontraron solicitudes",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                  )
-                else
-                  ...filteredRequests.map((req) {
-                    return MaintenanceCard(
-                      request: req,
-                      isExpanded: expandedCardId == req.id,
-                      image: _requestImages[req.id],
-                      onToggleExpand: () => setState(
-                        () => expandedCardId = expandedCardId == req.id
-                            ? null
-                            : req.id,
-                      ),
-                      onPickImage: (source) => _pickImage(req, source),
-                      onRemoveImage: () =>
-                          setState(() => _requestImages.remove(req.id)),
-                      onStateUpdated: () => setState(
-                        () {},
-                      ), // Repinta la pantalla si cambia un estado interno
-                    );
-                  }).toList(),
-              ],
+              ),
             ),
+          ],
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFF2E7D32),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (ctx) => CreateMaintenanceSheet(
+                  service: _service,
+                  onCreated: _cargarSolicitudes,
+                ),
+              );
+            },
+            child: const Icon(Icons.add),
           ),
         ),
       ],

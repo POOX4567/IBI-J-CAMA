@@ -4,7 +4,7 @@ import 'package:intl/date_symbol_data_local.dart'; // INTL: inicializar español
 import 'package:provider/provider.dart'; // PROVIDER
 
 // Tus pantallas y componentes existentes
-import 'screens/login_screen.dart';
+import './screens/Login/Login.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'package:ibi/utils/notification_service.dart';
 
@@ -22,6 +22,7 @@ void main() async {
   // Inicializar notificaciones
   await NotificationService.init();
 
+  // HIVE: inicializa el almacenamiento local de datos
   runApp(
     // PROVIDER: Inyección global de tus estados (Horarios y Áreas)
     MultiProvider(
@@ -60,9 +61,9 @@ class MyApp extends StatelessWidget {
       locale: const Locale('es', 'ES'),
 
       // Tu flujo original: Inicia en el Login y respeta tus rutas de navegación
-      home: const LoginScreen(),
+      home: const Login(),
       routes: {
-        '/login': (context) => const LoginScreen(),
+        '/login': (context) => const Login(),
         '/home': (context) => const BottomNavBar(),
       },
     );

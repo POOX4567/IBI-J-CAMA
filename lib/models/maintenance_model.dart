@@ -1,49 +1,69 @@
 import 'package:flutter/material.dart';
 
 class MaintenanceModel {
-  final String title;
-  final String severity; // Alta, Media, Baja
-  final String status; // Abierto, En proceso, Resuelto
-  final String area;
+  final int id;
+  final String titulo;
+  final String descripcion;
+  final String tipo;
+  final String estado;
+  final String invernadero;
+  final String? imagen;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   MaintenanceModel({
-    required this.title,
-    required this.severity,
-    required this.status,
-    required this.area,
+    required this.id,
+    required this.titulo,
+    required this.descripcion,
+    required this.tipo,
+    required this.estado,
+    required this.invernadero,
+    this.imagen,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  // Mapeo desde las estructuras de MongoDB o APIs JSON
-  factory MaintenanceModel.fromMap(Map<String, dynamic> map) {
+  factory MaintenanceModel.fromJson(Map<String, dynamic> json) {
     return MaintenanceModel(
-      title: map['title'] ?? '',
-      severity: map['severity'] ?? 'Baja',
-      status: map['status'] ?? 'Abierto',
-      area: map['area'] ?? 'Área general',
+      id: int.parse(json['id'].toString()),
+      titulo: json['titulo'].toString(),
+      descripcion: json['descripcion'].toString(),
+      tipo: json['tipo'].toString(),
+      estado: json['estado'].toString(),
+      invernadero: json['invernadero'].toString(),
+      imagen: json['imagen']?.toString(),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'].toString())
+          : null,
     );
   }
 
-  // Colores lógicos por Severidad
-  Color get severityColor {
-    switch (severity) {
-      case "Alta":
-        return Colors.red.shade900;
-      case "Media":
+  Color get tipoColor {
+    switch (tipo) {
+      case 'Preventivo':
+        return Colors.blue.shade700;
+      case 'Correctivo':
         return Colors.orange.shade800;
       default:
-        return Colors.green.shade700;
+        return Colors.grey.shade700;
     }
   }
 
-  // Colores lógicos por Estado
-  Color get statusColor {
-    switch (status) {
-      case "Abierto":
-        return Colors.red;
-      case "En proceso":
+  Color get estadoColor {
+    switch (estado) {
+      case 'Pendiente':
         return Colors.orange;
-      default:
+      case 'En proceso':
+        return Colors.blue;
+      case 'Resuelto':
         return Colors.green;
+      case 'Abierto':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 }

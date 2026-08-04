@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 NUEVO
 
 import 'area.dart';
 
@@ -18,13 +19,21 @@ class AreaService {
     return 'https://ibijicama.utptics.com/api';
   }
 
+  static const FlutterSecureStorage _storage =
+      FlutterSecureStorage(); // 👈 NUEVO
+
   // 'Accept' es CLAVE: sin este header, Laravel puede regresar una
   // página HTML de error/redirección en vez de JSON, y el jsonDecode()
   // truena con un FormatException que se veía "en silencio".
-  static const Map<String, String> _headers = {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-  };
+  // 👇 Ahora es un método async que agrega el token guardado por AuthService.
+  Future<Map<String, String>> _headers() async {
+    final token = await _storage.read(key: 'token');
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
 
   static const _timeout = Duration(seconds: 15);
 
@@ -60,7 +69,9 @@ class AreaService {
   Future<List<Area>> obtenerAreas() async {
     final uri = Uri.parse('$baseUrl/areas');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -74,7 +85,7 @@ class AreaService {
   /// PATCH de progreso/estado, que actualizan, no consultan.
   Future<Area> obtenerArea(int id) async {
     final res = await http
-        .get(Uri.parse('$baseUrl/areas/$id'), headers: _headers)
+        .get(Uri.parse('$baseUrl/areas/$id'), headers: await _headers())
         .timeout(_timeout);
     if (res.statusCode == 200) {
       return Area.fromJson(_extraerMapa(res.body));
@@ -86,7 +97,9 @@ class AreaService {
   Future<List<Area>> obtenerHistorial() async {
     final uri = Uri.parse('$baseUrl/areas/historial');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -101,7 +114,9 @@ class AreaService {
   Future<Map<String, dynamic>> obtenerResumenDia() async {
     final uri = Uri.parse('$baseUrl/areas/resumen-dia');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       return _extraerMapa(res.body);
@@ -115,7 +130,9 @@ class AreaService {
   Future<List<Map<String, dynamic>>> obtenerProductividadSemanal() async {
     final uri = Uri.parse('$baseUrl/areas/productividad-semanal');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -128,13 +145,15 @@ class AreaService {
 
   /// POST /areas
   Future<Area> crearArea(Area area) async {
+    debugPrint('👉 POST $baseUrl/areas body=${jsonEncode(area.toJson())}');
     final res = await http
         .post(
           Uri.parse('$baseUrl/areas'),
-          headers: _headers,
+          headers: await _headers(),
           body: jsonEncode(area.toJson()),
         )
         .timeout(_timeout);
+    debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 201 || res.statusCode == 200) {
       return Area.fromJson(_extraerMapa(res.body));
     }
@@ -146,7 +165,7 @@ class AreaService {
     final res = await http
         .put(
           Uri.parse('$baseUrl/areas/$id'),
-          headers: _headers,
+          headers: await _headers(),
           body: jsonEncode(area.toJson()),
         )
         .timeout(_timeout);
@@ -161,7 +180,7 @@ class AreaService {
   /// DELETE /areas/{id}
   Future<void> eliminarArea(int id) async {
     final res = await http
-        .delete(Uri.parse('$baseUrl/areas/$id'), headers: _headers)
+        .delete(Uri.parse('$baseUrl/areas/$id'), headers: await _headers())
         .timeout(_timeout);
     if (res.statusCode != 200 && res.statusCode != 204) {
       throw Exception(
@@ -176,7 +195,7 @@ class AreaService {
     final res = await http
         .patch(
           Uri.parse('$baseUrl/areas/$id/progreso'),
-          headers: _headers,
+          headers: await _headers(),
           body: jsonEncode({'progreso': progreso}),
         )
         .timeout(_timeout);
@@ -194,7 +213,7 @@ class AreaService {
     final res = await http
         .patch(
           Uri.parse('$baseUrl/areas/$id/estado'),
-          headers: _headers,
+          headers: await _headers(),
           body: jsonEncode({'estado': estado}),
         )
         .timeout(_timeout);
@@ -210,7 +229,9 @@ class AreaService {
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
     final uri = Uri.parse('$baseUrl/employees');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -232,7 +253,9 @@ class AreaService {
   Future<List<Map<String, dynamic>>> obtenerInvernaderos() async {
     final uri = Uri.parse('$baseUrl/invernaderos');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -254,7 +277,9 @@ class AreaService {
   Future<List<Map<String, dynamic>>> obtenerCultivos() async {
     final uri = Uri.parse('$baseUrl/cultivos');
     debugPrint('👉 GET $uri');
-    final res = await http.get(uri, headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);

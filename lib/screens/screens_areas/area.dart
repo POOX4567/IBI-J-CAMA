@@ -39,8 +39,8 @@ class Area {
     return Icons.agriculture;
   }
 
-  double get progresoNormalizado =>
-      (progreso / 100).clamp(0.0, 1.0); // para widgets 0.0-1.0
+  // en area.dart
+  double get progresoNormalizado => progreso.clamp(0.0, 1.0);
   int get progresoPorcentaje => progreso.round();
 
   /// Construye un Area a partir del JSON de la API.

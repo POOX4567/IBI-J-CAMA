@@ -17,7 +17,8 @@ class AreaDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Normalizamos el progreso una sola vez: la BD guarda 0-100,
     // pero los widgets de porcentaje necesitan 0.0-1.0
-    final double progresoNormalizado = (area.progreso / 100).clamp(0.0, 1.0);
+    // en area_detail_screen.dart
+    final double progresoNormalizado = area.progreso.clamp(0.0, 1.0);
 
     var withValues = Colors.black.withValues(alpha: 0.12);
     return Scaffold(

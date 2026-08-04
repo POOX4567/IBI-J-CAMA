@@ -1,20 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:ibi/data/mock_data.dart';
+import 'package:ibi/models/sensor_iot_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
 
 class SupervisionStatsGrid extends StatelessWidget {
-  final List<IotDevice> devices;
-  const SupervisionStatsGrid({Key? key, required this.devices})
-    : super(key: key);
+  final List<SensorIot> sensores;
+  final List<ElementoEstado> elementos;
+
+  const SupervisionStatsGrid({
+    Key? key,
+    required this.sensores,
+    required this.elementos,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    int total = devices.length;
-    int operativos = devices.where((d) => d.status == 'operativo').length;
-    int fallas = devices.where((d) => d.status == 'falla').length;
-    int mantenimiento = devices
-        .where((d) => d.status == 'mantenimiento')
-        .length;
+    // Calculamos el total de dispositivos (Sensores + Elementos)
+    int total = sensores.length + elementos.length;
+
+    // Conteo basado en los IDs de la base de datos:
+    // 1 = Operativo, 2 = Inactivo, 3 = Falla, 4 = Mantenimiento
+    int operativos =
+        sensores.where((s) => s.estadoId == 1).length +
+        elementos.where((e) => e.estadoId == 1).length;
+
+    int fallas =
+        sensores.where((s) => s.estadoId == 3).length +
+        elementos.where((e) => e.estadoId == 3).length;
+
+    int mantenimiento =
+        sensores.where((s) => s.estadoId == 4).length +
+        elementos.where((e) => e.estadoId == 4).length;
 
     return GridView.count(
       crossAxisCount: 2,
