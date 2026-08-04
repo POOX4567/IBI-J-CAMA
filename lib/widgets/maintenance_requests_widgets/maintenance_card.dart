@@ -14,6 +14,7 @@ class MaintenanceCard extends StatelessWidget {
   final Function(ImageSource) onPickImage;
   final VoidCallback onRemoveImage;
   final VoidCallback onStateUpdated;
+  final VoidCallback? onEditRequested;
 
   const MaintenanceCard({
     Key? key,
@@ -24,6 +25,7 @@ class MaintenanceCard extends StatelessWidget {
     required this.onPickImage,
     required this.onRemoveImage,
     required this.onStateUpdated,
+    this.onEditRequested,
   }) : super(key: key);
 
   @override
@@ -296,22 +298,23 @@ class MaintenanceCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _mostrarOpcionesDeContacto(context),
-                icon: const Icon(LucideIcons.phone, size: 16),
-                label: const Text("Contactar"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            if (onEditRequested != null) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onEditRequested,
+                  icon: const Icon(LucideIcons.pencil, size: 16),
+                  label: const Text("Editar"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF5D4037),
+                    side: BorderSide(color: Colors.grey[300]!),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _mostrarOpcionesDeEstado(context),
@@ -332,13 +335,14 @@ class MaintenanceCard extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDePrioridad(context),
-                icon: const Icon(LucideIcons.alertTriangle, size: 16),
-                label: const Text("Prioridad"),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF5D4037),
-                  side: BorderSide(color: Colors.grey[300]!),
+              child: ElevatedButton.icon(
+                onPressed: () => _mostrarOpcionesDeContacto(context),
+                icon: const Icon(LucideIcons.phone, size: 16),
+                label: const Text("Contactar"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -348,9 +352,9 @@ class MaintenanceCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDeAsignacion(context),
-                icon: const Icon(LucideIcons.userPlus, size: 16),
-                label: const Text("Asignar"),
+                onPressed: () => _mostrarOpcionesDePrioridad(context),
+                icon: const Icon(LucideIcons.alertTriangle, size: 16),
+                label: const Text("Tipo"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF5D4037),
                   side: BorderSide(color: Colors.grey[300]!),
@@ -365,10 +369,6 @@ class MaintenanceCard extends StatelessWidget {
       ],
     );
   }
-
-  // ==========================================
-  // LÓGICA DE LOS MENÚS (BOTTOM SHEETS)
-  // ==========================================
 
   void _mostrarOpcionesDeEstado(BuildContext context) {
     showModalBottomSheet(
@@ -422,10 +422,10 @@ class MaintenanceCard extends StatelessWidget {
           children: [
             ListTile(
               leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
-              title: const Text("Correctivo (Urgente)"),
+              title: const Text("Correctivo"),
               onTap: () {
                 request.priority = "Correctivo";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
+                _cerrarYActualizar(ctx, 'Tipo actualizado');
               },
             ),
             ListTile(
@@ -433,7 +433,7 @@ class MaintenanceCard extends StatelessWidget {
               title: const Text("Preventivo"),
               onTap: () {
                 request.priority = "Preventivo";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
+                _cerrarYActualizar(ctx, 'Tipo actualizado');
               },
             ),
           ],
@@ -442,42 +442,21 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  void _mostrarOpcionesDeAsignacion(BuildContext context) {
-    final tecnicos = [
-      "Juan Pérez",
-      "Roberto Gómez",
-      "Ana Martínez",
-      "Marcus Rivera",
-      "Carlos Mendoza",
-    ];
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: tecnicos
-              .map(
-                (tecnico) => ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFF81C784),
-                    radius: 14,
-                    child: Icon(Icons.person, size: 16, color: Colors.white),
-                  ),
-                  title: Text(tecnico),
-                  onTap: () {
-                    request.assignedTo = tecnico;
-                    _cerrarYActualizar(ctx, 'Asignado a $tecnico');
-                  },
-                ),
-              )
-              .toList(),
-        ),
+  void _cerrarYActualizar(BuildContext context, String mensaje) {
+    Navigator.pop(context);
+    onStateUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
+
+  // ==========================================
+  // LÓGICA DE LOS MENÚS (BOTTOM SHEETS)
+  // ==========================================
 
   void _mostrarOpcionesDeContacto(BuildContext context) {
     final persona = request.assignedTo ?? request.reportedBy;
@@ -543,17 +522,5 @@ class MaintenanceCard extends StatelessWidget {
         ),
       );
     }
-  }
-
-  void _cerrarYActualizar(BuildContext context, String mensaje) {
-    Navigator.pop(context);
-    onStateUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 }

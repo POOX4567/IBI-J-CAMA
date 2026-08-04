@@ -9,6 +9,8 @@ import '../../widgets/maintenance_requests_widgets/maintenance_header.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_card.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_stats_grid.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_search_filter.dart';
+import '../../widgets/maintenance_requests_widgets/create_maintenance_sheet.dart';
+import '../../widgets/maintenance_requests_widgets/edit_maintenance_sheet.dart';
 
 class MaintenanceRequestsScreen extends StatefulWidget {
   const MaintenanceRequestsScreen({Key? key}) : super(key: key);
@@ -136,60 +138,102 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
       return matchesFilter && matchesSearch;
     }).toList();
 
-    return Column(
+    return Stack(
       children: [
-        MaintenanceHeader(totalRequests: _requests.length),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MaintenanceStatsGrid(requests: _requests),
-                const SizedBox(height: 12),
-                MaintenanceSearchFilter(
-                  searchController: _searchController,
-                  currentFilter: filter,
-                  onSearchChanged: (val) => setState(() => searchTerm = val),
-                  onFilterChanged: (val) {
-                    setState(() => filter = val);
-                    _guardarFiltro(val);
-                  },
+        Column(
+          children: [
+            MaintenanceHeader(totalRequests: _requests.length),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MaintenanceStatsGrid(requests: _requests),
+                    const SizedBox(height: 12),
+                    MaintenanceSearchFilter(
+                      searchController: _searchController,
+                      currentFilter: filter,
+                      onSearchChanged: (val) => setState(() => searchTerm = val),
+                      onFilterChanged: (val) {
+                        setState(() => filter = val);
+                        _guardarFiltro(val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (filteredRequests.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Text(
+                          "No se encontraron solicitudes",
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                      )
+                    else
+                      ...filteredRequests.map((req) {
+                        return MaintenanceCard(
+                          request: req,
+                          isExpanded: expandedCardId == req.id,
+                          image: _requestImages[req.id],
+                          onToggleExpand: () => setState(
+                            () => expandedCardId = expandedCardId == req.id
+                                ? null
+                                : req.id,
+                          ),
+                          onPickImage: (source) => _pickImage(req, source),
+                          onRemoveImage: () =>
+                              setState(() => _requestImages.remove(req.id)),
+                          onStateUpdated: () => setState(() {}),
+                          onEditRequested: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                              ),
+                              builder: (ctx) => EditMaintenanceSheet(
+                                service: _service,
+                                request: req,
+                                onSaved: _cargarSolicitudes,
+                              ),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    const SizedBox(height: 70),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                if (filteredRequests.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(
-                      "No se encontraron solicitudes",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                  )
-                else
-                  ...filteredRequests.map((req) {
-                    return MaintenanceCard(
-                      request: req,
-                      isExpanded: expandedCardId == req.id,
-                      image: _requestImages[req.id],
-                      onToggleExpand: () => setState(
-                        () => expandedCardId = expandedCardId == req.id
-                            ? null
-                            : req.id,
-                      ),
-                      onPickImage: (source) => _pickImage(req, source),
-                      onRemoveImage: () =>
-                          setState(() => _requestImages.remove(req.id)),
-                      onStateUpdated: () => setState(() {}),
-                    );
-                  }).toList(),
-              ],
+              ),
             ),
+          ],
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFF2E7D32),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (ctx) => CreateMaintenanceSheet(
+                  service: _service,
+                  onCreated: _cargarSolicitudes,
+                ),
+              );
+            },
+            child: const Icon(Icons.add),
           ),
         ),
       ],
