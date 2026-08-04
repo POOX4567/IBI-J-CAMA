@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../screens/screen_reports/reports_page.dart';
 
 class SectionTitle extends StatelessWidget {
   final String title;
@@ -56,55 +55,6 @@ class InfoRow extends StatelessWidget {
                     color: Colors.green,
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ReportButton extends StatelessWidget {
-  const ReportButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    // Cambié GestureDetector por InkWell para que al pulsar el botón principal
-    // también muestre el feedback visual de pulsación nativo de Android/iOS.
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xff1B5E20),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ReportsPage()),
-            );
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: const Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.description, color: Colors.white),
-                SizedBox(width: 10),
-                Text(
-                  "Ver Reportes Detallados",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(width: 10),
-                Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
               ],
             ),
           ),

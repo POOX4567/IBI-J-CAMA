@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:ibi/models/incident_model.dart';
-import '../services/incident_service.dart'; // Ajusta la ruta a tu IncidentService
+import '../services/incident_service.dart';
 
 /// Modelo de datos genérico para mapear información hacia las tarjetas de la UI
 class MetricData {
@@ -20,6 +23,10 @@ class MetricData {
 class ResumenProvider with ChangeNotifier {
   final IncidentService _incidentService = IncidentService();
 
+  // Configuración para la API de Empleados
+  static const String _baseUrl = 'https://ibijicama.utptics.com/api';
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
   // Estados de control para la UI
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -35,7 +42,7 @@ class ResumenProvider with ChangeNotifier {
     cargarDatosDesdeServicio();
   }
 
-  /// Inicializa con datos vacíos o "placeholders" para evitar errores de nulos al arrancar la app
+  /// Inicializa con datos vacíos o "placeholders"
   void _inicializarDatosPorDefecto() {
     tarjetasPrincipales = {
       'invernaderos': MetricData(
@@ -68,23 +75,57 @@ class ResumenProvider with ChangeNotifier {
     actividadReciente = [];
   }
 
-  /// Método principal que invoca al IncidentService y procesa los datos
+  /// Método para consultar la API de empleados
+  Future<List<dynamic>> _fetchEmpleadosApi() async {
+    try {
+      final token = await _storage.read(key: 'token');
+      final response = await http.get(
+        Uri.parse('$_baseUrl/employees'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        if (body['success'] == true && body['data'] != null) {
+          return body['data'];
+        }
+      }
+    } catch (e) {
+      debugPrint("Error al consultar empleados API: $e");
+    }
+    return [];
+  }
+
+  /// Método principal que invoca los servicios y procesa los datos
   Future<void> cargarDatosDesdeServicio() async {
     _isLoading = true;
-    notifyListeners(); // Notifica a la UI que muestre el spinner de carga
+    notifyListeners();
 
     try {
-      // 1. Llamada asíncrona al servicio (espera los 1.2 segundos simulados)
-      final List<IncidentModel> incidentes = await _incidentService
-          .fetchIncidents();
+      // 1. Llamada asíncrona al servicio de incidentes y a la API de Empleados en paralelo
+      final results = await Future.wait([
+        _incidentService.fetchIncidents(),
+        _fetchEmpleadosApi(),
+      ]);
 
-      // 2. Procesamos métricas para las "Tarjetas Principales" basándonos en los estados del JSON
+      final List<IncidentModel> incidentes = results[0] as List<IncidentModel>;
+      final List<dynamic> empleadosApi = results[1] as List<dynamic>;
+
+      // 2. Procesamos métricas para las tarjetas
       final int totalAlertasActivas = incidentes
           .where((i) => i.status == "Abierto" || i.status == "En proceso")
           .length;
+
       final int totalMantenimientos = incidentes
           .where((i) => i.status == "Resuelto" || i.severity == "Baja")
           .length;
+
+      // Conteo dinámico traído directamente de la API de Laravel
+      final int totalEmpleados = empleadosApi.length;
 
       tarjetasPrincipales['invernaderos'] = MetricData(
         titulo: "Invernaderos",
@@ -92,11 +133,14 @@ class ResumenProvider with ChangeNotifier {
         subtitulo: "Activos",
         detalleAlerta: "Sistemas estables a excepción de fallas reportadas.",
       );
+
+      // ⚡ AHORA SE CONSUME DINÁMICAMENTE DE TU BACKEND
       tarjetasPrincipales['empleados'] = MetricData(
         titulo: "Empleados",
-        valor: "12",
-        subtitulo: "En turno",
-        detalleAlerta: "Personal completo asignado a las zonas.",
+        valor: totalEmpleados > 0 ? "$totalEmpleados" : "0",
+        subtitulo: "Registrados",
+        detalleAlerta:
+            "Se encontraron $totalEmpleados empleados registrados en el sistema.",
       );
 
       tarjetasPrincipales['alertas'] = MetricData(
@@ -115,7 +159,7 @@ class ResumenProvider with ChangeNotifier {
             "Historial cuenta con $totalMantenimientos registros preventivos/resueltos.",
       );
 
-      // 3. Mapeamos dinámicamente las "Alertas Importantes" (Filtrando incidentes de severidad Alta o Media)
+      // 3. Alertas Importantes
       alertasImportantes = incidentes
           .where((i) => i.severity == "Alta" || i.severity == "Media")
           .map(
@@ -128,7 +172,7 @@ class ResumenProvider with ChangeNotifier {
           )
           .toList();
 
-      // 4. Mapeamos la "Actividad Reciente" (Muestra todo el historial cronológico del servicio)
+      // 4. Actividad Reciente
       actividadReciente = incidentes
           .map(
             (i) => MetricData(
@@ -140,7 +184,7 @@ class ResumenProvider with ChangeNotifier {
           )
           .toList();
 
-      // 5. Mapeamos el "Resumen de Actividad"
+      // 5. Resumen de Actividad
       resumenActividad = [
         MetricData(
           titulo: "Actividad Diaria",
@@ -150,10 +194,10 @@ class ResumenProvider with ChangeNotifier {
         ),
       ];
     } catch (e) {
-      debugPrint("Error al cargar incidentes en el Provider: $e");
+      debugPrint("Error al cargar datos en el Provider: $e");
     } finally {
       _isLoading = false;
-      notifyListeners(); // Notifica a la UI que ya hay datos disponibles
+      notifyListeners();
     }
   }
 }
