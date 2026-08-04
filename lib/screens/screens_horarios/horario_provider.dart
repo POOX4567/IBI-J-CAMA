@@ -76,8 +76,6 @@ class HorarioProvider extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      // Aseguramos tener la lista de empleados fresca para poder
-      // rellenar nombres si el backend no los trae en este endpoint.
       if (_empleados.isEmpty) {
         await cargarEmpleados();
       }
@@ -86,6 +84,7 @@ class HorarioProvider extends ChangeNotifier {
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
+      debugPrint('❌ Error en cargarHorarios: $e');
     }
     isLoading = false;
     notifyListeners();
