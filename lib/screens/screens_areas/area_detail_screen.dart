@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart'; // FLUTTER_SLIDABLE
 import 'package:provider/provider.dart'; // PROVIDER
 import 'area.dart';
 import 'area_provider.dart';
+import 'area_modal.dart';
 
 class AreaDetailScreen extends StatelessWidget {
   final Area area;
@@ -14,6 +15,11 @@ class AreaDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Normalizamos el progreso una sola vez: la BD guarda 0-100,
+    // pero los widgets de porcentaje necesitan 0.0-1.0
+    // en area_detail_screen.dart
+    final double progresoNormalizado = area.progreso.clamp(0.0, 1.0);
+
     var withValues = Colors.black.withValues(alpha: 0.12);
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
@@ -164,9 +170,9 @@ class AreaDetailScreen extends StatelessWidget {
                       lineWidth: 14.0,
                       animation: true,
                       animationDuration: 1200,
-                      percent: area.progreso,
+                      percent: progresoNormalizado, // ✅ 0.0 - 1.0
                       center: Text(
-                        '${(area.progreso * 100).round()}%',
+                        '${(progresoNormalizado * 100).round()}%',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 22,
@@ -182,14 +188,14 @@ class AreaDetailScreen extends StatelessWidget {
                   // PERCENT_INDICATOR: barra lineal de progreso
                   LinearPercentIndicator(
                     lineHeight: 14.0,
-                    percent: area.progreso,
+                    percent: progresoNormalizado, // ✅ 0.0 - 1.0
                     animation: true,
                     animationDuration: 1000,
                     progressColor: area.statusColor,
                     backgroundColor: const Color(0xffE8F5E9),
                     barRadius: const Radius.circular(14),
                     center: Text(
-                      '${(area.progreso * 100).round()}%',
+                      '${(progresoNormalizado * 100).round()}%',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -217,7 +223,9 @@ class AreaDetailScreen extends StatelessWidget {
                   SlidableAction(
                     onPressed: (_) {
                       // PROVIDER + FLUTTERTOAST: eliminar área con toast
-                      context.read<AreaProvider>().eliminarArea(area.area);
+                      context.read<AreaProvider>().eliminarArea(
+                        area,
+                      ); // ✅ objeto Area completo
                       Navigator.pop(context);
                     },
                     backgroundColor: Colors.red,
@@ -233,12 +241,10 @@ class AreaDetailScreen extends StatelessWidget {
                 children: [
                   SlidableAction(
                     onPressed: (_) {
-                      Fluttertoast.showToast(
-                        msg: 'Edición de "${area.area}" próximamente',
-                        toastLength: Toast.LENGTH_SHORT,
-                        gravity: ToastGravity.BOTTOM,
-                        backgroundColor: const Color(0xff1B5E20),
-                        textColor: Colors.white,
+                      mostrarModalEditarArea(
+                        context,
+                        context.read<AreaProvider>(),
+                        area,
                       );
                     },
                     backgroundColor: const Color(0xff1B5E20),

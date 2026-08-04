@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // INTL: fechas en español
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart'
-    as picker; // FLUTTER_DATETIME_PICKER
 import 'package:provider/provider.dart'; // PROVIDER
 import 'package:flutter_slidable/flutter_slidable.dart'; // FLUTTER_SLIDABLE
 import 'package:fl_chart/fl_chart.dart'; // FL_CHART
 import 'horario.dart';
 import 'horario_provider.dart';
+import 'horario_form_screen.dart';
 
 class HorarioDetailScreen extends StatefulWidget {
   final Horario horario;
@@ -24,6 +23,10 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
   void initState() {
     super.initState();
     _horario = widget.horario;
+
+    Future.microtask(() {
+      context.read<HorarioProvider>().cargarHorarios();
+    });
   }
 
   // INTL: formatea una fecha en español
@@ -36,47 +39,31 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
     }
   }
 
-  // FLUTTER_DATETIME_PICKER: selector de nueva fecha/hora de entrada
-  void _seleccionarEntrada(BuildContext context) {
-    picker.DatePicker.showTimePicker(
+  // ── Único punto de edición: abre el formulario COMPLETO ─────────────────
+  // Se usa tanto desde el botón de editar del AppBar como desde los
+  // deslizables de Entrada/Salida, para que TODO se edite siempre desde
+  // el mismo modal (empleado, turno, actividad, fechas y horas).
+  Future<void> _editarHorarioCompleto(
+    BuildContext context,
+    Horario horarioActual,
+  ) async {
+    final actualizado = await HorarioFormScreen.show(
       context,
-      locale: picker.LocaleType.es,
-      showTitleActions: true,
-      onConfirm: (time) {
-        // PROVIDER: notifica el cambio al provider global
-        final hora = DateFormat('HH:mm').format(time);
-        context.read<HorarioProvider>().actualizarEntrada(
-          _horario.nombre,
-          hora,
-        );
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Entrada actualizada: $hora')));
-      },
+      horario: horarioActual,
+      provider: context.read<HorarioProvider>(),
     );
-  }
-
-  // FLUTTER_DATETIME_PICKER: selector de nueva fecha/hora de salida
-  void _seleccionarSalida(BuildContext context) {
-    picker.DatePicker.showTimePicker(
-      context,
-      locale: picker.LocaleType.es,
-      showTitleActions: true,
-      onConfirm: (time) {
-        final hora = DateFormat('HH:mm').format(time);
-        context.read<HorarioProvider>().actualizarSalida(_horario.nombre, hora);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Salida actualizada: $hora')));
-      },
-    );
+    if (actualizado == true && mounted) {
+      setState(() {}); // fuerza refresco del detalle con los datos nuevos
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     // PROVIDER: escucha cambios globales en horarios
     final provider = context.watch<HorarioProvider>();
-    final horarioActual = provider.obtenerHorario(_horario.nombre) ?? _horario;
+    final horarioActual = (_horario.id != null)
+        ? (provider.obtenerHorario(_horario.id!) ?? _horario)
+        : _horario;
 
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
@@ -85,6 +72,14 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
         backgroundColor: const Color(0xff1B5E20),
         title: const Text('Detalle de Horario'),
         centerTitle: false,
+        actions: [
+          // ── Botón para editar TODOS los campos del horario ──────────────
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Editar horario',
+            onPressed: () => _editarHorarioCompleto(context, horarioActual),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -179,14 +174,16 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
             ),
             const SizedBox(height: 12),
 
-            // FLUTTER_SLIDABLE: desliza para editar la hora de entrada
+            // FLUTTER_SLIDABLE: desliza para editar TODO el horario (ya no
+            // solo la hora de entrada — abre el formulario completo)
             Slidable(
               key: const ValueKey('entrada'),
               endActionPane: ActionPane(
                 motion: const ScrollMotion(),
                 children: [
                   SlidableAction(
-                    onPressed: (_) => _seleccionarEntrada(context),
+                    onPressed: (_) =>
+                        _editarHorarioCompleto(context, horarioActual),
                     backgroundColor: const Color(0xff1B5E20),
                     foregroundColor: Colors.white,
                     icon: Icons.edit,
@@ -205,14 +202,16 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
             ),
             const SizedBox(height: 10),
 
-            // FLUTTER_SLIDABLE: desliza para editar la hora de salida
+            // FLUTTER_SLIDABLE: desliza para editar TODO el horario (ya no
+            // solo la hora de salida — abre el formulario completo)
             Slidable(
               key: const ValueKey('salida'),
               endActionPane: ActionPane(
                 motion: const ScrollMotion(),
                 children: [
                   SlidableAction(
-                    onPressed: (_) => _seleccionarSalida(context),
+                    onPressed: (_) =>
+                        _editarHorarioCompleto(context, horarioActual),
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
                     icon: Icons.edit,

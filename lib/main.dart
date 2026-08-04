@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'; // INTL: soporte de idiomas
 import 'package:intl/date_symbol_data_local.dart'; // INTL: inicializar español
 import 'package:provider/provider.dart'; // PROVIDER
-import 'package:hive_flutter/hive_flutter.dart'; // HIVE
 
 // Tus pantallas y componentes existentes
 import './screens/Login/Login.dart';
@@ -12,7 +11,6 @@ import 'package:ibi/utils/notification_service.dart';
 // Los nuevos módulos de horarios y áreas
 import './screens/screens_horarios/horario_provider.dart';
 import './screens/screens_areas/area_provider.dart';
-import './screens/screens_areas/area.dart';
 
 void main() async {
   // Asegura que los bindings de Flutter estén listos antes de inicializar plugins asíncronos
@@ -30,9 +28,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => HorarioProvider()),
-        ChangeNotifierProvider(
-          create: (_) => AreaProvider()..cargarDesdeHive(),
-        ),
+        ChangeNotifierProvider(create: (_) => AreaProvider()),
       ],
       child: const MyApp(), // Mantenemos el nombre de tu clase original
     ),
