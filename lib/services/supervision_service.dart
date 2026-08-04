@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../models/maintenance_model.dart';
+import '../models/sensor_iot_model.dart';
+import '../models/elemento_estado_model.dart';
+import '../models/lectura_sensor_model.dart';
 import '../models/invernadero_model.dart';
 
-class MaintenanceService {
+class SupervisionService {
   static const String baseUrl = 'https://ibijicama.utptics.com/api';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -13,20 +15,19 @@ class MaintenanceService {
     return await _storage.read(key: 'token');
   }
 
-  Future<List<MaintenanceModel>> fetchMaintenanceTasks() async {
+  Future<List<SensorIot>> getSensores() async {
     final token = await _getToken();
     final response = await http.get(
-      Uri.parse('$baseUrl/mantenimientos'),
+      Uri.parse('$baseUrl/sensores'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
     );
-
     if (response.statusCode == 200) {
       List<dynamic> body = jsonDecode(response.body);
-      return body.map((json) => MaintenanceModel.fromJson(json)).toList();
+      return body.map((json) => SensorIot.fromJson(json)).toList();
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
@@ -34,31 +35,19 @@ class MaintenanceService {
     }
   }
 
-  Future<MaintenanceModel> createMaintenance({
-    required String titulo,
-    required String descripcion,
-    required String tipo,
-    required int invernaderoId,
-  }) async {
+  Future<List<ElementoEstado>> getElementos() async {
     final token = await _getToken();
-    final response = await http.post(
-      Uri.parse('$baseUrl/mantenimientos'),
+    final response = await http.get(
+      Uri.parse('$baseUrl/elemento-estado'),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({
-        'titulo': titulo,
-        'descripcion': descripcion,
-        'tipo': tipo,
-        'invernadero_id': invernaderoId,
-      }),
     );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final decoded = jsonDecode(response.body);
-      return MaintenanceModel.fromJson(decoded);
+    if (response.statusCode == 200) {
+      List<dynamic> body = jsonDecode(response.body);
+      return body.map((json) => ElementoEstado.fromJson(json)).toList();
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
@@ -66,7 +55,32 @@ class MaintenanceService {
     }
   }
 
-  Future<List<Invernadero>> fetchInvernaderos() async {
+  Future<List<LecturaSensor>> getLecturas() async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/lectura-sensores'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      if (decoded['status'] == 'success') {
+        List<dynamic> data = decoded['data'];
+        return data.map((json) => LecturaSensor.fromJson(json)).toList();
+      } else {
+        throw Exception(decoded['message'] ?? 'Fallo al cargar las lecturas');
+      }
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
+
+  Future<List<Invernadero>> getInvernaderos() async {
     final token = await _getToken();
     final response = await http.get(
       Uri.parse('$baseUrl/invernaderos'),
@@ -76,7 +90,6 @@ class MaintenanceService {
         'Authorization': 'Bearer $token',
       },
     );
-
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
       if (decoded['success'] == true) {
@@ -87,37 +100,6 @@ class MaintenanceService {
           decoded['message'] ?? 'Fallo al cargar los invernaderos',
         );
       }
-    } else {
-      throw Exception(
-        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
-      );
-    }
-  }
-
-  Future<MaintenanceModel> updateMaintenance({
-    required int id,
-    required String titulo,
-    required String descripcion,
-    required int invernaderoId,
-  }) async {
-    final token = await _getToken();
-    final response = await http.put(
-      Uri.parse('$baseUrl/mantenimientos/$id'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'titulo': titulo,
-        'descripcion': descripcion,
-        'invernadero_id': invernaderoId,
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
-      return MaintenanceModel.fromJson(decoded);
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',

@@ -1,208 +1,231 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:ibi/data/mock_data.dart'; // Ajusta la ruta a tus mocks
+import 'package:ibi/models/sensor_iot_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
 
 class SupervisionFailureChart extends StatelessWidget {
-  const SupervisionFailureChart({Key? key}) : super(key: key);
+  final List<SensorIot> sensores;
+  final List<ElementoEstado> elementos;
+
+  const SupervisionFailureChart({
+    Key? key,
+    required this.sensores,
+    required this.elementos,
+  }) : super(key: key);
+
+  String _normalizeLabel(String label) {
+    label = label.replaceAll(RegExp(r'\s*\d+\s*$'), '').trim();
+
+    if (label.endsWith('es') && label.length > 4) {
+      return label.substring(0, label.length - 2);
+    }
+    if (label.endsWith('s') && label.length > 3) {
+      return label.substring(0, label.length - 1);
+    }
+    return label;
+  }
+
+  List<Map<String, dynamic>> _buildGroupedData() {
+    final Map<String, int> counts = {};
+
+    for (final s in sensores) {
+      final key = s.modelo.isNotEmpty ? s.modelo : 'Sensor';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    for (final e in elementos) {
+      var key = e.elemento.isNotEmpty ? e.elemento : 'Elemento';
+      key = _normalizeLabel(key);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return entries.map((e) {
+      return {'label': e.key, 'count': e.value};
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Colores exactos extraídos de la gráfica
+    final groupedData = _buildGroupedData();
+    final total = sensores.length + elementos.length;
+
     final List<Color> chartColors = [
-      const Color(0xFF3B82F6), // Azul
-      const Color(0xFFEF4444), // Rojo
-      const Color(0xFFF59E0B), // Naranja
-      const Color(0xFF10B981), // Verde
-      const Color(0xFF8B5CF6), // Morado
-      const Color(0xFF6B7280), // Gris
+      const Color(0xFF3B82F6),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+      const Color(0xFF6B7280),
     ];
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!, width: 1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Título de la sección
-          Row(
-            children: [
-              Icon(LucideIcons.alertCircle, size: 18, color: Colors.red[600]),
-              const SizedBox(width: 8),
-              const Text(
-                "Fallas Frecuentes",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
+          const Text(
+            "Dispositivos por Tipo",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Color(0xFF2E3A4B),
+            ),
           ),
-          const SizedBox(height: 24),
-
-          // Gráfica de Barras
-          SizedBox(
-            height: 220,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY:
-                    12.5, // Límite superior para dar un ligero respiro al máximo de 12
-                barTouchData: BarTouchData(enabled: true),
-                gridData: const FlGridData(
-                  show: false,
-                ), // Oculta la cuadrícula de fondo
-                borderData: FlBorderData(
-                  show: true,
-                  border: const Border(
-                    bottom: BorderSide(color: Colors.grey, width: 1),
-                    left: BorderSide(color: Colors.grey, width: 1),
-                    top: BorderSide.none,
-                    right: BorderSide.none,
-                  ),
+          const SizedBox(height: 16),
+          if (groupedData.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  "Sin datos disponibles",
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
                 ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 3, // Muestra los números 0, 3, 6, 9, 12
-                      reservedSize: 24,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          value.toInt().toString(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.black54,
-                          ),
-                        );
-                      },
+              ),
+            )
+          else ...[
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: (groupedData
+                            .map((e) => e['count'] as int)
+                            .reduce((a, b) => a > b ? a : b) *
+                          1.3)
+                      .toDouble(),
+                  barTouchData: BarTouchData(enabled: true),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: const Border(
+                      bottom: BorderSide(color: Colors.grey, width: 1),
+                      left: BorderSide(color: Colors.grey, width: 1),
+                      top: BorderSide.none,
+                      right: BorderSide.none,
                     ),
                   ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 70, // Espacio para el texto rotado
-                      getTitlesWidget: (double value, TitleMeta meta) {
-                        if (value.toInt() >= mockFailureStats.length)
-                          return const SizedBox();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 12.0),
-                          child: Transform.rotate(
-                            angle: -0.7, // Rotación diagonal
+                  titlesData: FlTitlesData(
+                    show: true,
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 24,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0) return const SizedBox();
+                          return Text(
+                            value.toInt().toString(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.black54,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 32,
+                        getTitlesWidget: (value, meta) {
+                          final idx = value.toInt();
+                          if (idx >= groupedData.length) return const SizedBox();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              mockFailureStats[value.toInt()].type,
+                              groupedData[idx]['label'].toString(),
                               style: const TextStyle(
                                 fontSize: 9,
                                 color: Colors.black87,
                               ),
-                              textAlign: TextAlign.right,
+                              textAlign: TextAlign.center,
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
+                  barGroups: groupedData.asMap().entries.map((entry) {
+                    return BarChartGroupData(
+                      x: entry.key,
+                      barRods: [
+                        BarChartRodData(
+                          toY: (entry.value['count'] as int).toDouble(),
+                          color: chartColors[entry.key % chartColors.length],
+                          width: 32,
+                          borderRadius: BorderRadius.zero,
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
-                barGroups: mockFailureStats.asMap().entries.map((entry) {
-                  return BarChartGroupData(
-                    x: entry.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: entry.value.count.toDouble(),
-                        color: chartColors[entry.key % chartColors.length],
-                        width: 40, // Barras anchas
-                        borderRadius:
-                            BorderRadius.zero, // Sin bordes redondeados
-                      ),
-                    ],
-                  );
-                }).toList(),
               ),
             ),
-          ),
+            const SizedBox(height: 12),
+            Divider(color: Colors.grey[200]),
+            const SizedBox(height: 8),
+            ...groupedData.asMap().entries.map((entry) {
+              final item = entry.value;
+              final count = item['count'] as int;
+              final pct = total > 0 ? (count / total * 100).round() : 0;
+              final color = chartColors[entry.key % chartColors.length];
 
-          const SizedBox(height: 12),
-          Divider(color: Colors.grey[200]),
-          const SizedBox(height: 8),
-
-          // Lista/Leyenda inferior
-          ...mockFailureStats.asMap().entries.map((entry) {
-            final stat = entry.value;
-            final color = chartColors[entry.key % chartColors.length];
-
-            // Lógica para los colores del pill de porcentaje
-            Color badgeBgColor;
-            Color badgeTextColor;
-            Color badgeBorderColor;
-
-            if (stat.percentage >= 20) {
-              badgeBgColor = Colors.red[50]!;
-              badgeTextColor = Colors.red[800]!;
-              badgeBorderColor = Colors.red[200]!;
-            } else if (stat.percentage >= 15) {
-              badgeBgColor = Colors.orange[50]!;
-              badgeTextColor = Colors.orange[800]!;
-              badgeBorderColor = Colors.orange[300]!;
-            } else {
-              badgeBgColor = Colors.blueGrey[50]!;
-              badgeTextColor = Colors.blueGrey[700]!;
-              badgeBorderColor = Colors.blueGrey[200]!;
-            }
-
-            String formattedPercentage =
-                stat.percentage.truncateToDouble() == stat.percentage
-                ? stat.percentage.toInt().toString()
-                : stat.percentage.toString();
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6.0),
-              child: Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    stat.type,
-                    style: const TextStyle(fontSize: 12, color: Colors.black87),
-                  ),
-                  const Spacer(),
-                  Text(
-                    stat.count.toString(),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 50,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    decoration: BoxDecoration(
-                      color: badgeBgColor,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: badgeBorderColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item['label'].toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      "$formattedPercentage%",
-                      style: TextStyle(color: badgeTextColor, fontSize: 11),
+                    Text(
+                      '$count',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        '$pct%',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
         ],
       ),
     );

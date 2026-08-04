@@ -1,4 +1,5 @@
 // lib/data/mock_data.dart
+import '../models/maintenance_model.dart';
 
 class MaintenanceRequest {
   final String id;
@@ -24,6 +25,21 @@ class MaintenanceRequest {
     required this.reportedDate,
     this.device,
   });
+
+  factory MaintenanceRequest.fromMaintenanceModel(MaintenanceModel model) {
+    return MaintenanceRequest(
+      id: model.id.toString(),
+      title: model.titulo,
+      greenhouse: model.invernadero,
+      priority: model.tipo,
+      status: model.estado,
+      description: model.descripcion,
+      reportedBy: 'API',
+      assignedTo: null,
+      reportedDate: model.createdAt ?? DateTime.now(),
+      device: null,
+    );
+  }
 }
 
 class IotDevice {
