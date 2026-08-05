@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/maintenance_model.dart';
 import '../models/invernadero_model.dart';
+import '../models/employee_model.dart';
 
 class MaintenanceService {
   static const String baseUrl = 'https://ibijicama.utptics.com/api';
@@ -39,6 +40,7 @@ class MaintenanceService {
     required String descripcion,
     required String tipo,
     required int invernaderoId,
+    int? agricultorId,
   }) async {
     final token = await _getToken();
     final response = await http.post(
@@ -53,6 +55,7 @@ class MaintenanceService {
         'descripcion': descripcion,
         'tipo': tipo,
         'invernadero_id': invernaderoId,
+        if (agricultorId != null) 'agricultor_id': agricultorId,
       }),
     );
 
@@ -86,6 +89,34 @@ class MaintenanceService {
       } else {
         throw Exception(
           decoded['message'] ?? 'Fallo al cargar los invernaderos',
+        );
+      }
+    } else {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
+
+  Future<List<Employee>> fetchEmployees() async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/employees'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        List<dynamic> data = decoded['data'];
+        return data.map((json) => Employee.fromJson(json)).toList();
+      } else {
+        throw Exception(
+          decoded['message'] ?? 'Fallo al cargar los empleados',
         );
       }
     } else {
