@@ -128,4 +128,22 @@ class MaintenanceService {
       );
     }
   }
+
+  Future<void> deleteMaintenance(int id) async {
+    final token = await _getToken();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/mantenimiento/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception(
+        'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
+      );
+    }
+  }
 }

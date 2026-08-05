@@ -357,12 +357,12 @@ class MaintenanceCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDePrioridad(context),
-                icon: const Icon(LucideIcons.alertTriangle, size: 16),
-                label: const Text("Tipo"),
+                onPressed: () => _confirmarEliminar(context),
+                icon: const Icon(LucideIcons.trash2, size: 16, color: Colors.red),
+                label: const Text("Eliminar", style: TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF5D4037),
-                  side: BorderSide(color: Colors.grey[300]!),
+                  foregroundColor: Colors.red,
+                  side: BorderSide(color: Colors.red[200]!),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -415,52 +415,37 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  void _mostrarOpcionesDePrioridad(BuildContext context) {
-    showModalBottomSheet(
+  void _confirmarEliminar(BuildContext context) {
+    showDialog(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
-              title: const Text("Correctivo"),
-              onTap: () {
-                Navigator.pop(ctx);
-                _actualizarTipo('Correctivo', 'Tipo actualizado', context);
-              },
-            ),
-            ListTile(
-              leading: Icon(LucideIcons.arrowDownCircle, color: Colors.green[600]),
-              title: const Text("Preventivo"),
-              onTap: () {
-                Navigator.pop(ctx);
-                _actualizarTipo('Preventivo', 'Tipo actualizado', context);
-              },
-            ),
-          ],
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar solicitud'),
+        content: const Text('¿Estás seguro de eliminar esta solicitud? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _eliminarSolicitud(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _actualizarEstado(String nuevoEstado, String mensaje, BuildContext context) async {
+  Future<void> _eliminarSolicitud(BuildContext context) async {
     try {
-      await service.updateMaintenance(
-        id: int.parse(request.id),
-        titulo: request.title,
-        descripcion: request.description,
-        tipo: request.priority,
-        estado: nuevoEstado,
-      );
-      request.status = nuevoEstado;
+      await service.deleteMaintenance(int.parse(request.id));
       onRefresh();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(mensaje),
+          content: const Text('Solicitud eliminada correctamente'),
           backgroundColor: const Color(0xFF2E7D32),
           duration: const Duration(seconds: 2),
         ),
@@ -476,15 +461,16 @@ class MaintenanceCard extends StatelessWidget {
     }
   }
 
-  Future<void> _actualizarTipo(String nuevoTipo, String mensaje, BuildContext context) async {
+  Future<void> _actualizarEstado(String nuevoEstado, String mensaje, BuildContext context) async {
     try {
       await service.updateMaintenance(
         id: int.parse(request.id),
         titulo: request.title,
         descripcion: request.description,
-        tipo: nuevoTipo,
+        tipo: request.priority,
+        estado: nuevoEstado,
       );
-      request.priority = nuevoTipo;
+      request.status = nuevoEstado;
       onRefresh();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
