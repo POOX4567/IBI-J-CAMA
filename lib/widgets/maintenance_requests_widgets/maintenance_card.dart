@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
 import 'package:ibi/services/maintenance_service.dart';
+import 'package:ibi/models/employee_model.dart';
 import '../../utils/maintenance_helpers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,6 +19,7 @@ class MaintenanceCard extends StatelessWidget {
   final VoidCallback? onEditRequested;
   final MaintenanceService service;
   final VoidCallback onRefresh;
+  final List<Employee> empleados;
 
   const MaintenanceCard({
     Key? key,
@@ -31,6 +33,7 @@ class MaintenanceCard extends StatelessWidget {
     this.onEditRequested,
     required this.service,
     required this.onRefresh,
+    required this.empleados,
   }) : super(key: key);
 
   @override
@@ -496,7 +499,14 @@ class MaintenanceCard extends StatelessWidget {
 
   void _mostrarOpcionesDeContacto(BuildContext context) {
     final persona = request.assignedTo ?? request.reportedBy;
-    const numeroTelefono = "9991234567";
+    Employee? empleado;
+    if (request.assignedTo != null) {
+      try {
+        empleado = empleados.firstWhere((e) => e.nombre == request.assignedTo);
+      } catch (_) {}
+    }
+    final numeroTelefono = empleado?.telephone;
+    final tieneTelefono = numeroTelefono != null && numeroTelefono.isNotEmpty;
 
     showModalBottomSheet(
       context: context,
@@ -526,15 +536,22 @@ class MaintenanceCard extends StatelessWidget {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.phoneCall, color: Colors.green),
-              title: const Text("Llamar por teléfono"),
-              subtitle: const Text(numeroTelefono),
-              onTap: () {
-                Navigator.pop(ctx);
-                _hacerLlamada(numeroTelefono, context);
-              },
-            ),
+            if (tieneTelefono)
+              ListTile(
+                leading: const Icon(LucideIcons.phoneCall, color: Colors.green),
+                title: const Text("Llamar por teléfono"),
+                subtitle: Text(numeroTelefono!),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _hacerLlamada(numeroTelefono, context);
+                },
+              )
+            else
+              ListTile(
+                leading: const Icon(LucideIcons.phoneOff, color: Colors.grey),
+                title: const Text("Sin teléfono registrado"),
+                subtitle: const Text("Este empleado no tiene número de contacto"),
+              ),
           ],
         ),
       ),
