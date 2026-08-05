@@ -2,83 +2,52 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:ibi/models/incident_model.dart';
-import '../services/incident_service.dart';
 
-/// Modelo de datos genérico para mapear información hacia las tarjetas de la UI
-class MetricData {
-  final String titulo;
-  final String valor;
-  final String subtitulo;
-  final String detalleAlerta;
+// Importaciones con rutas de paquete absolutas
+import 'package:ibi/models/activity_history_model.dart';
+import 'package:ibi/models/alerta_model.dart';
+import 'package:ibi/models/employee_model.dart';
+import 'package:ibi/models/invernadero_model.dart';
+import 'package:ibi/models/maintenance_model.dart';
 
-  MetricData({
-    required this.titulo,
-    this.valor = "",
-    required this.subtitulo,
-    required this.detalleAlerta,
-  });
-}
+import 'package:ibi/services/activity_history_service.dart';
+import 'package:ibi/services/alerta_service.dart';
+import 'package:ibi/services/invernadero_service.dart';
+import 'package:ibi/services/maintenance_service.dart';
 
 class ResumenProvider with ChangeNotifier {
-  final IncidentService _incidentService = IncidentService();
+  final AlertaService _alertaService = AlertaService();
+  final ActivityHistoryService _activityService = ActivityHistoryService();
+  final InvernaderoService _invernaderoService = InvernaderoService();
+  final MaintenanceService _maintenanceService = MaintenanceService();
 
-  // Configuración para la API de Empleados
   static const String _baseUrl = 'https://ibijicama.utptics.com/api';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Estados de control para la UI
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // Listas internas que alimentarán a la interfaz
-  Map<String, MetricData> tarjetasPrincipales = {};
-  List<MetricData> alertasImportantes = [];
-  List<MetricData> resumenActividad = [];
-  List<MetricData> actividadReciente = [];
+  List<Invernadero> _invernaderos = [];
+  List<Employee> _empleados = [];
+  List<Alerta> _alertas = [];
+  List<MaintenanceModel> _mantenimientos = [];
+  List<ActivityHistoryModel> _actividades = [];
+
+  List<Invernadero> get invernaderos => _invernaderos;
+  List<Employee> get empleados => _empleados;
+  List<Alerta> get alertas => _alertas;
+  List<MaintenanceModel> get mantenimientos => _mantenimientos;
+  List<ActivityHistoryModel> get actividades => _actividades;
 
   ResumenProvider() {
-    _inicializarDatosPorDefecto();
-    cargarDatosDesdeServicio();
+    cargarDatos();
   }
 
-  /// Inicializa con datos vacíos o "placeholders"
-  void _inicializarDatosPorDefecto() {
-    tarjetasPrincipales = {
-      'invernaderos': MetricData(
-        titulo: "Invernaderos",
-        valor: "--",
-        subtitulo: "Cargando...",
-        detalleAlerta: "",
-      ),
-      'empleados': MetricData(
-        titulo: "Empleados",
-        valor: "--",
-        subtitulo: "Cargando...",
-        detalleAlerta: "",
-      ),
-      'alertas': MetricData(
-        titulo: "Alertas",
-        valor: "--",
-        subtitulo: "Cargando...",
-        detalleAlerta: "",
-      ),
-      'mantenimiento': MetricData(
-        titulo: "Mantenimiento",
-        valor: "--",
-        subtitulo: "Cargando...",
-        detalleAlerta: "",
-      ),
-    };
-    alertasImportantes = [];
-    resumenActividad = [];
-    actividadReciente = [];
-  }
-
-  /// Método para consultar la API de empleados
-  Future<List<dynamic>> _fetchEmpleadosApi() async {
+  Future<List<Employee>> _fetchEmpleadosApi() async {
     try {
       final token = await _storage.read(key: 'token');
+      if (token == null || token.isEmpty) return <Employee>[];
+
       final response = await http.get(
         Uri.parse('$_baseUrl/employees'),
         headers: {
@@ -89,112 +58,74 @@ class ResumenProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> body = jsonDecode(response.body);
-        if (body['success'] == true && body['data'] != null) {
-          return body['data'];
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic> &&
+            body['success'] == true &&
+            body['data'] is List) {
+          final List listData = body['data'];
+          return listData
+              .where((e) => e != null)
+              .map((e) => Employee.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
         }
       }
     } catch (e) {
       debugPrint("Error al consultar empleados API: $e");
     }
-    return [];
+    return <Employee>[];
   }
 
-  /// Método principal que invoca los servicios y procesa los datos
-  Future<void> cargarDatosDesdeServicio() async {
+  Future<void> cargarDatos() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 1. Llamada asíncrona al servicio de incidentes y a la API de Empleados en paralelo
-      final results = await Future.wait([
-        _incidentService.fetchIncidents(),
-        _fetchEmpleadosApi(),
+      // Usamos .then con cast explícito para asegurar que cada Future devuelva exactamente List<T>
+      final results = await Future.wait<dynamic>([
+        _invernaderoService
+            .obtenerInvernaderos()
+            .then((res) => List<Invernadero>.from(res))
+            .catchError((e) {
+              debugPrint("Error al obtener invernaderos: $e");
+              return <Invernadero>[];
+            }),
+        _fetchEmpleadosApi().then((res) => List<Employee>.from(res)).catchError(
+          (e) {
+            debugPrint("Error al obtener empleados: $e");
+            return <Employee>[];
+          },
+        ),
+        _alertaService
+            .obtenerAlertas()
+            .then((res) => List<Alerta>.from(res))
+            .catchError((e) {
+              debugPrint("Error al obtener alertas: $e");
+              return <Alerta>[];
+            }),
+        _maintenanceService
+            .fetchMaintenanceTasks()
+            .then((res) => List<MaintenanceModel>.from(res))
+            .catchError((e) {
+              debugPrint("Error al obtener mantenimientos: $e");
+              return <MaintenanceModel>[];
+            }),
+        _activityService
+            .obtenerActividades()
+            .then((res) => List<ActivityHistoryModel>.from(res))
+            .catchError((e) {
+              debugPrint("Error al obtener actividades: $e");
+              return <ActivityHistoryModel>[];
+            }),
       ]);
 
-      final List<IncidentModel> incidentes = results[0] as List<IncidentModel>;
-      final List<dynamic> empleadosApi = results[1] as List<dynamic>;
-
-      // 2. Procesamos métricas para las tarjetas
-      final int totalAlertasActivas = incidentes
-          .where((i) => i.status == "Abierto" || i.status == "En proceso")
-          .length;
-
-      final int totalMantenimientos = incidentes
-          .where((i) => i.status == "Resuelto" || i.severity == "Baja")
-          .length;
-
-      // Conteo dinámico traído directamente de la API de Laravel
-      final int totalEmpleados = empleadosApi.length;
-
-      tarjetasPrincipales['invernaderos'] = MetricData(
-        titulo: "Invernaderos",
-        valor: "4/5",
-        subtitulo: "Activos",
-        detalleAlerta: "Sistemas estables a excepción de fallas reportadas.",
-      );
-
-      // ⚡ AHORA SE CONSUME DINÁMICAMENTE DE TU BACKEND
-      tarjetasPrincipales['empleados'] = MetricData(
-        titulo: "Empleados",
-        valor: totalEmpleados > 0 ? "$totalEmpleados" : "0",
-        subtitulo: "Registrados",
-        detalleAlerta:
-            "Se encontraron $totalEmpleados empleados registrados en el sistema.",
-      );
-
-      tarjetasPrincipales['alertas'] = MetricData(
-        titulo: "Alertas Activas",
-        valor: totalAlertasActivas.toString(),
-        subtitulo: "Requieren atención",
-        detalleAlerta:
-            "Existen $totalAlertasActivas incidentes pendientes en revisión.",
-      );
-
-      tarjetasPrincipales['mantenimiento'] = MetricData(
-        titulo: "Mantenimientos",
-        valor: totalMantenimientos.toString(),
-        subtitulo: "Tareas registradas",
-        detalleAlerta:
-            "Historial cuenta con $totalMantenimientos registros preventivos/resueltos.",
-      );
-
-      // 3. Alertas Importantes
-      alertasImportantes = incidentes
-          .where((i) => i.severity == "Alta" || i.severity == "Media")
-          .map(
-            (i) => MetricData(
-              titulo: i.title,
-              subtitulo: i.area,
-              detalleAlerta:
-                  "El incidente en ${i.area} se encuentra en estado '${i.status}' con severidad ${i.severity}.",
-            ),
-          )
-          .toList();
-
-      // 4. Actividad Reciente
-      actividadReciente = incidentes
-          .map(
-            (i) => MetricData(
-              titulo: i.title,
-              subtitulo: "Estado: ${i.status} - ${i.area}",
-              detalleAlerta:
-                  "Registro automático: El sistema reporta '${i.title}' en la ubicación ${i.area}.",
-            ),
-          )
-          .toList();
-
-      // 5. Resumen de Actividad
-      resumenActividad = [
-        MetricData(
-          titulo: "Actividad Diaria",
-          subtitulo: "${incidentes.length} eventos en total",
-          detalleAlerta:
-              "Se procesaron exitosamente todos los reportes del día de hoy.",
-        ),
-      ];
-    } catch (e) {
-      debugPrint("Error al cargar datos en el Provider: $e");
+      _invernaderos = results[0] as List<Invernadero>;
+      _empleados = results[1] as List<Employee>;
+      _alertas = results[2] as List<Alerta>;
+      _mantenimientos = results[3] as List<MaintenanceModel>;
+      _actividades = results[4] as List<ActivityHistoryModel>;
+    } catch (e, stack) {
+      debugPrint("Error general en ResumenProvider: $e");
+      debugPrint("Stack trace: $stack");
     } finally {
       _isLoading = false;
       notifyListeners();

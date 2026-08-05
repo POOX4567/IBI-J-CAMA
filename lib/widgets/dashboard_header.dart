@@ -32,78 +32,119 @@ class DashboardHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Image.asset(logoPath, width: 100, height: 100),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // ⚡ 1. LOGO ACOTADO A TAMAÑO COMPACTO
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Image.asset(
+                      logoPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.white24,
+                          child: const Icon(
+                            Icons.eco,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
 
-                  const SizedBox(width: 12),
-
-                  Column(
+                // ⚡ 2. COLUMNA DE TEXTOS DENTRO DE EXPANDED (Evita el despliegue a 422px)
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         title,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 30,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-
-                      const SizedBox(height: 5),
-
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
                         style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 16,
+                          fontSize: 13,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                ],
-              ),
-
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(Icons.notifications, color: Colors.white),
+                const SizedBox(width: 8),
+
+                // ⚡ 3. CONTENEDOR DE NOTIFICACIONES CONTROLADO
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.notifications,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    onPressed: () {},
+                  ),
+                ),
+              ],
+            ),
+
+            // ⚡ 4. PESTAÑAS RENDERIZADAS CON EXPANDED
+            if (showTabs) ...[
+              const SizedBox(height: 18),
+              Row(
+                children: List.generate(
+                  tabs!.length,
+                  (index) => Expanded(
+                    child: DashboardTab(
+                      title: tabs![index],
+                      active: selectedTab == index,
+                      onTap: () => onTabChanged!(index),
+                    ),
+                  ),
+                ),
               ),
             ],
-          ),
-
-          if (showTabs) ...[
-            const SizedBox(height: 25),
-
-            Row(
-              children: List.generate(
-                tabs!.length,
-                (index) => DashboardTab(
-                  title: tabs![index],
-                  active: selectedTab == index,
-                  onTap: () => onTabChanged!(index),
-                ),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
