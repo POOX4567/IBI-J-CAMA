@@ -1,20 +1,38 @@
 import 'package:flutter/material.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // INTL: soporte de idiomas
+import 'package:intl/date_symbol_data_local.dart'; // INTL: inicializar español
+import 'package:provider/provider.dart'; // PROVIDER
 
-import 'screens/login_screen.dart';
+// Tus pantallas y componentes existentes
+import './screens/Login/Login.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'package:ibi/utils/notification_service.dart';
 
+// Los nuevos módulos de horarios y áreas
+import './screens/screens_horarios/horario_provider.dart';
+import './screens/screens_areas/area_provider.dart';
+
 void main() async {
+  // Asegura que los bindings de Flutter estén listos antes de inicializar plugins asíncronos
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configuración de fechas en español
+  // INTL: inicializa los datos de localización en español para fechas y monedas
   await initializeDateFormatting('es', null);
 
   // Inicializar notificaciones
   await NotificationService.init();
 
-  runApp(const MyApp());
+  // HIVE: inicializa el almacenamiento local de datos
+  runApp(
+    // PROVIDER: Inyección global de tus estados (Horarios y Áreas)
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HorarioProvider()),
+        ChangeNotifierProvider(create: (_) => AreaProvider()),
+      ],
+      child: const MyApp(), // Mantenemos el nombre de tu clase original
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -23,12 +41,29 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'IBI-Jícama',
+      title: 'IBI-Jícama', // Tu título original
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.green, fontFamily: 'Roboto'),
-      home: const LoginScreen(),
+
+      // Combinamos tu color verde original con el nuevo sistema Material 3
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        fontFamily: 'Roboto', // Tu fuente original
+        useMaterial3: true,
+      ),
+
+      // INTL: Delegados para que el calendario y textos del sistema salgan en español
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
+      locale: const Locale('es', 'ES'),
+
+      // Tu flujo original: Inicia en el Login y respeta tus rutas de navegación
+      home: const Login(),
       routes: {
-        '/login': (context) => const LoginScreen(),
+        '/login': (context) => const Login(),
         '/home': (context) => const BottomNavBar(),
       },
     );

@@ -14,6 +14,7 @@ class MaintenanceCard extends StatelessWidget {
   final Function(ImageSource) onPickImage;
   final VoidCallback onRemoveImage;
   final VoidCallback onStateUpdated;
+  final VoidCallback? onEditRequested;
 
   const MaintenanceCard({
     Key? key,
@@ -24,6 +25,7 @@ class MaintenanceCard extends StatelessWidget {
     required this.onPickImage,
     required this.onRemoveImage,
     required this.onStateUpdated,
+    this.onEditRequested,
   }) : super(key: key);
 
   @override
@@ -296,26 +298,23 @@ class MaintenanceCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                // Cambiamos la función que se ejecuta aquí
-                onPressed: () => _mostrarOpcionesDeContacto(context),
-                icon: const Icon(
-                  LucideIcons.phone,
-                  size: 16,
-                ), // Cambiamos el icono
-                label: const Text("Contactar"), // Cambiamos el texto
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            if (onEditRequested != null) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onEditRequested,
+                  icon: const Icon(LucideIcons.pencil, size: 16),
+                  label: const Text("Editar"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF5D4037),
+                    side: BorderSide(color: Colors.grey[300]!),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _mostrarOpcionesDeEstado(context),
@@ -336,13 +335,14 @@ class MaintenanceCard extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDePrioridad(context),
-                icon: const Icon(LucideIcons.alertTriangle, size: 16),
-                label: const Text("Prioridad"),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF5D4037),
-                  side: BorderSide(color: Colors.grey[300]!),
+              child: ElevatedButton.icon(
+                onPressed: () => _mostrarOpcionesDeContacto(context),
+                icon: const Icon(LucideIcons.phone, size: 16),
+                label: const Text("Contactar"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -352,9 +352,9 @@ class MaintenanceCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDeAsignacion(context),
-                icon: const Icon(LucideIcons.userPlus, size: 16),
-                label: const Text("Asignar"),
+                onPressed: () => _mostrarOpcionesDePrioridad(context),
+                icon: const Icon(LucideIcons.alertTriangle, size: 16),
+                label: const Text("Tipo"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF5D4037),
                   side: BorderSide(color: Colors.grey[300]!),
@@ -370,10 +370,6 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  // ==========================================
-  // LÓGICA DE LOS MENÚS (BOTTOM SHEETS)
-  // ==========================================
-
   void _mostrarOpcionesDeEstado(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -388,7 +384,7 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.clock, color: Colors.orange[600]),
               title: const Text("Marcar como Pendiente"),
               onTap: () {
-                request.status = "pendiente";
+                request.status = "Pendiente";
                 _cerrarYActualizar(ctx, 'Estado actualizado');
               },
             ),
@@ -396,15 +392,15 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.alertCircle, color: Colors.blue[600]),
               title: const Text("Marcar en Progreso"),
               onTap: () {
-                request.status = "en_progreso";
+                request.status = "En proceso";
                 _cerrarYActualizar(ctx, 'Estado actualizado');
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.checkCircle, color: Colors.green[600]),
-              title: const Text("Cerrar Solicitud (Completada)"),
+              title: const Text("Cerrar Solicitud (Resuelto)"),
               onTap: () {
-                request.status = "completada";
+                request.status = "Resuelto";
                 _cerrarYActualizar(ctx, 'Solicitud completada');
               },
             ),
@@ -426,29 +422,18 @@ class MaintenanceCard extends StatelessWidget {
           children: [
             ListTile(
               leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
-              title: const Text("Urgente (Alta)"),
+              title: const Text("Correctivo"),
               onTap: () {
-                request.priority = "alta";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
+                request.priority = "Correctivo";
+                _cerrarYActualizar(ctx, 'Tipo actualizado');
               },
             ),
             ListTile(
-              leading: Icon(LucideIcons.minusCircle, color: Colors.yellow[800]),
-              title: const Text("Media"),
+              leading: Icon(LucideIcons.arrowDownCircle, color: Colors.green[600]),
+              title: const Text("Preventivo"),
               onTap: () {
-                request.priority = "media";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                LucideIcons.arrowDownCircle,
-                color: Colors.green[600],
-              ),
-              title: const Text("Baja"),
-              onTap: () {
-                request.priority = "baja";
-                _cerrarYActualizar(ctx, 'Prioridad actualizada');
+                request.priority = "Preventivo";
+                _cerrarYActualizar(ctx, 'Tipo actualizado');
               },
             ),
           ],
@@ -457,47 +442,24 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  void _mostrarOpcionesDeAsignacion(BuildContext context) {
-    final tecnicos = [
-      "Juan Pérez",
-      "Roberto Gómez",
-      "Ana Martínez",
-      "Marcus Rivera",
-      "Carlos Mendoza",
-    ];
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: tecnicos
-              .map(
-                (tecnico) => ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFF81C784),
-                    radius: 14,
-                    child: Icon(Icons.person, size: 16, color: Colors.white),
-                  ),
-                  title: Text(tecnico),
-                  onTap: () {
-                    request.assignedTo = tecnico;
-                    _cerrarYActualizar(ctx, 'Asignado a $tecnico');
-                  },
-                ),
-              )
-              .toList(),
-        ),
+  void _cerrarYActualizar(BuildContext context, String mensaje) {
+    Navigator.pop(context);
+    onStateUpdated();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  // Nuevo menú para elegir el método de contacto
+  // ==========================================
+  // LÓGICA DE LOS MENÚS (BOTTOM SHEETS)
+  // ==========================================
+
   void _mostrarOpcionesDeContacto(BuildContext context) {
     final persona = request.assignedTo ?? request.reportedBy;
-    // Como el mock_data no tiene teléfonos, usamos uno ficticio para el ejemplo
     const numeroTelefono = "9991234567";
 
     showModalBottomSheet(
@@ -537,24 +499,12 @@ class MaintenanceCard extends StatelessWidget {
                 _hacerLlamada(numeroTelefono, context);
               },
             ),
-            ListTile(
-              leading: const Icon(
-                LucideIcons.messageSquare,
-                color: Colors.blue,
-              ),
-              title: const Text("Enviar mensaje interno"),
-              onTap: () {
-                Navigator.pop(ctx);
-                _abrirChatSimulado(context, persona);
-              },
-            ),
           ],
         ),
       ),
     );
   }
 
-  // La función principal de url_launcher
   Future<void> _hacerLlamada(String numero, BuildContext context) async {
     final Uri urlLlamada = Uri(scheme: 'tel', path: numero);
 
@@ -572,53 +522,5 @@ class MaintenanceCard extends StatelessWidget {
         ),
       );
     }
-  }
-
-  // Mantenemos tu chat simulado intacto, solo recibe el nombre por parámetro
-  void _abrirChatSimulado(BuildContext context, String persona) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Chat con $persona', style: const TextStyle(fontSize: 16)),
-        content: const TextField(
-          maxLines: 3,
-          decoration: InputDecoration(
-            hintText: 'Escribe un mensaje...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Mensaje enviado')));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-            ),
-            child: const Text('Enviar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _cerrarYActualizar(BuildContext context, String mensaje) {
-    Navigator.pop(context);
-    onStateUpdated(); // Llama a setState en la pantalla principal para refrescar la UI
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 }

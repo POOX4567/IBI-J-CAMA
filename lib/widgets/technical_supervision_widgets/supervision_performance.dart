@@ -1,65 +1,228 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:ibi/models/sensor_iot_model.dart';
+import 'package:ibi/models/elemento_estado_model.dart';
 
 class SupervisionPerformance extends StatelessWidget {
-  const SupervisionPerformance({Key? key}) : super(key: key);
+  final List<SensorIot> sensores;
+  final List<ElementoEstado> elementos;
+
+  const SupervisionPerformance({
+    Key? key,
+    required this.sensores,
+    required this.elementos,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _perfCard("Uptime", "94.3%", "30 días", Colors.blue)),
-        const SizedBox(width: 8),
-        Expanded(child: _perfCard("MTTR", "4.2h", "Promedio", Colors.purple)),
-        const SizedBox(width: 8),
-        Expanded(child: _perfCard("Reparaciones", "12", "Total", Colors.cyan)),
-      ],
-    );
-  }
+    final operativos = sensores.where((s) => s.estadoId == 1).length +
+        elementos.where((e) => e.estadoId == 1).length;
+    final inactivos = sensores.where((s) => s.estadoId == 2).length +
+        elementos.where((e) => e.estadoId == 2).length;
+    final fallas = sensores.where((s) => s.estadoId == 3).length +
+        elementos.where((e) => e.estadoId == 3).length;
+    final mantenimiento = sensores.where((s) => s.estadoId == 4).length +
+        elementos.where((e) => e.estadoId == 4).length;
+    final total = sensores.length + elementos.length;
 
-  // Método auxiliar privado encapsulado en el mismo archivo
-  Widget _perfCard(
-    String title,
-    String value,
-    String subtitle,
-    MaterialColor color,
-  ) {
     return Container(
-      padding: const EdgeInsets.all(8), // Padding ajustado
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color[300]!, width: 2),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            title,
-            style: TextStyle(color: color[700], fontSize: 11),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                color: color[900],
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+          const Text(
+            "Distribución de Estados",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Color(0xFF2E3A4B),
             ),
           ),
-          Text(
-            subtitle,
-            style: TextStyle(color: color[600], fontSize: 9),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          const SizedBox(height: 16),
+          if (total == 0)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text(
+                  "Sin dispositivos",
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: SizedBox(
+                    height: 150,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        PieChart(
+                          PieChartData(
+                            sectionsSpace: 3,
+                            centerSpaceRadius: 36,
+                            sections: _buildSections(
+                              operativos,
+                              inactivos,
+                              fallas,
+                              mantenimiento,
+                            ),
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$total',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            Text(
+                              'dispositivos',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    children: [
+                      _legendItem(
+                        Colors.green,
+                        'Operativos',
+                        operativos,
+                        total,
+                      ),
+                      const SizedBox(height: 6),
+                      _legendItem(
+                        Colors.grey[600]!,
+                        'Inactivos',
+                        inactivos,
+                        total,
+                      ),
+                      const SizedBox(height: 6),
+                      _legendItem(Colors.red, 'Fallas', fallas, total),
+                      const SizedBox(height: 6),
+                      _legendItem(
+                        Colors.orange,
+                        'Mantenimiento',
+                        mantenimiento,
+                        total,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
+    );
+  }
+
+  List<PieChartSectionData> _buildSections(
+    int operativos,
+    int inactivos,
+    int fallas,
+    int mantenimiento,
+  ) {
+    final sections = <PieChartSectionData>[];
+
+    if (operativos > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.green,
+          value: operativos.toDouble(),
+          radius: 12,
+          showTitle: false,
+        ),
+      );
+    }
+    if (inactivos > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.grey[600]!,
+          value: inactivos.toDouble(),
+          radius: 12,
+          showTitle: false,
+        ),
+      );
+    }
+    if (fallas > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.red,
+          value: fallas.toDouble(),
+          radius: 12,
+          showTitle: false,
+        ),
+      );
+    }
+    if (mantenimiento > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.orange,
+          value: mantenimiento.toDouble(),
+          radius: 12,
+          showTitle: false,
+        ),
+      );
+    }
+
+    return sections;
+  }
+
+  Widget _legendItem(Color color, String label, int count, int total) {
+    final pct = total > 0 ? (count / total * 100).round() : 0;
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+          ),
+        ),
+        Text(
+          '$count',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 36,
+          child: Text(
+            '$pct%',
+            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 }

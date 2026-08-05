@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
-import '../screens/screens_horarios/horario.dart';
-import '../screens/screens_horarios/horario_data.dart';
-import '../screens/screens_horarios/horario_detail_screen.dart';
-import '../widgets/alerta_card.dart';
+import 'package:table_calendar/table_calendar.dart'; // TABLE_CALENDAR
+import 'package:intl/intl.dart'; // INTL
+import 'package:provider/provider.dart'; // PROVIDER
+
+import 'package:flutter_slidable/flutter_slidable.dart'; // FLUTTER_SLIDABLE
+import 'package:fl_chart/fl_chart.dart'; // FL_CHART
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart'; // FLUTTER_STAGGERED_GRID_VIEW
+import 'package:percent_indicator/percent_indicator.dart'; // PERCENT_INDICATOR
+import 'package:animations/animations.dart'; // ANIMATIONS
+import 'package:fluttertoast/fluttertoast.dart'; // FLUTTERTOAST
+import 'package:dropdown_search/dropdown_search.dart'; // DROPDOWN_SEARCH
+
+import './screens_horarios/horario.dart';
+import './screens_horarios/horario_detail_screen.dart';
+import './screens_horarios/horario_provider.dart';
+import './screens_horarios/horario_form_screen.dart';
+import './screens_areas/area.dart';
+import './screens_areas/area_detail_screen.dart';
+import './screens_areas/area_provider.dart';
+import './screens_areas/area_historial_screen.dart';
+import './screens_areas/area_modal.dart';
 import '../widgets/horario_card.dart';
-
-import 'screens_areas/area.dart';
-import 'screens_areas/area_data.dart';
-import 'screens_areas/area_detail_screen.dart';
-
 import '../widgets/area_card.dart';
-import '../widgets/notificacion_card.dart';
-import '../widgets/widgets_dashboard/dashboard_stat_card.dart';
+import '../widgets/dashboard_stat_card.dart';
 import '../widgets/filtro_chip_widget.dart';
-import 'screens_areas/area_historial_screen.dart';
 
 class HorariosScreen extends StatefulWidget {
   const HorariosScreen({super.key});
@@ -24,144 +34,95 @@ class HorariosScreen extends StatefulWidget {
 
 class _HorariosScreenState extends State<HorariosScreen> {
   bool mostrarHorarios = true;
-  late List<Horario> _horarios;
-  late List<Area> _areas;
-  int _nextHorarioTemplate = 0;
-  int _nextAreaTemplate = 0;
-
-  final List<Horario> _horarioTemplates = const [
-    Horario(
-      nombre: 'Laura Ramírez',
-      turno: 'Matutino',
-      actividad: 'Revisión de cultivos',
-      fechaInicio: '12/06/2026',
-      fechaFin: '26/06/2026',
-      entrada: '07:00',
-      salida: '15:30',
-    ),
-    Horario(
-      nombre: 'Pablo Suárez',
-      turno: 'Vespertino',
-      actividad: 'Cosecha',
-      fechaInicio: '14/06/2026',
-      fechaFin: '28/06/2026',
-      entrada: '13:00',
-      salida: '21:00',
-    ),
-    Horario(
-      nombre: 'Elena Torres',
-      turno: 'Nocturno',
-      actividad: 'Monitoreo de riego',
-      fechaInicio: '16/06/2026',
-      fechaFin: '30/06/2026',
-      entrada: '22:00',
-      salida: '06:00',
-    ),
-  ];
-
-  final List<Area> _areaTemplates = const [
-    Area(
-      empleado: 'Luis Herrera',
-      area: 'Invernadero C',
-      cultivo: 'Fresa',
-      actividad: 'Poda',
-      estado: 'Pendiente',
-      progreso: 0.35,
-    ),
-    Area(
-      empleado: 'Ana García',
-      area: 'Invernadero D',
-      cultivo: 'Lechuga',
-      actividad: 'Riego',
-      estado: 'Pendiente',
-      progreso: 0.25,
-    ),
-    Area(
-      empleado: 'Diego Ramírez',
-      area: 'Invernadero E',
-      cultivo: 'Hierbas',
-      actividad: 'Fertilización',
-      estado: 'Pendiente',
-      progreso: 0.15,
-    ),
-  ];
 
   @override
   void initState() {
     super.initState();
-    _horarios = List<Horario>.from(horarios);
-    _areas = List<Area>.from(areas);
-  }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // ── HORARIOS: SIN try/catch silencioso ───────────────────────────
+      // Si algo falla aquí (servidor, red, parsing), el error queda
+      // guardado en `provider.error` y se muestra en el banner rojo de
+      // la UI, además de imprimirse en consola con debugPrint dentro
+      // del propio HorarioProvider. Ya no se traga en silencio.
+      final provider = context.read<HorarioProvider>();
+      provider.cargarHorarios();
+      provider.cargarEmpleados();
 
-  void _addHorario() {
-    setState(() {
-      final Horario template =
-          _horarioTemplates[_nextHorarioTemplate % _horarioTemplates.length];
-      _horarios.add(template);
-      _nextHorarioTemplate++;
-    });
-  }
-
-  void _addInvernadero() {
-    setState(() {
-      final Area template =
-          _areaTemplates[_nextAreaTemplate % _areaTemplates.length];
-      _areas.add(template);
-      _nextAreaTemplate++;
+      // ── ÁREAS: en su propio try/catch ────────────────────────────────
+      // Así, si AreaProvider no está listo o su endpoint falla, NO
+      // bloquea ni oculta lo que pase con Horarios.
+      try {
+        final areaProvider = context.read<AreaProvider>();
+        areaProvider.cargarAreas();
+        areaProvider.cargarDatosDeFormulario();
+      } catch (e) {
+        debugPrint('⚠️ Error cargando AreaProvider: $e');
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final int horariosActivos = _horarios.length;
-    final int turnosDistintos = _horarios
-        .map((horario) => horario.turno)
-        .toSet()
-        .length;
+    // PROVIDER: lee los horarios y áreas del estado global
+    final horarioProvider = context.watch<HorarioProvider>();
+    final areaProvider = context.watch<AreaProvider>();
+    final horariosActivos = horarioProvider.horarios;
+    final areasActivas = areaProvider.areas;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF4F7FA),
+      backgroundColor: const Color(0xffF8FAFC),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: const Color(0xff1B5E20),
         title: Text(
           mostrarHorarios ? 'Gestión de Horarios' : 'Gestión de Áreas',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            fontSize: 20,
+          ),
         ),
         centerTitle: false,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Resumen rápido ─────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xff1B5E20), Color(0xff43A047)],
+                  colors: [Color(0xff1B5E20), Color(0xff2E7D32)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
+                    color: const Color(0xff1B5E20).withValues(alpha: 0.25),
                     blurRadius: 20,
-                    offset: const Offset(0, 10),
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Resumen Rápido',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    'RESUMEN OPERATIVO',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   const Text(
-                    'Horarios y horarios activos',
+                    'Horarios y Áreas Activas',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -173,47 +134,14 @@ class _HorariosScreenState extends State<HorariosScreen> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'Activos: $horariosActivos',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                      _resumenChip(
+                        'Activos: ${horarioProvider.totalHorariosActivos}',
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'Turnos: $turnosDistintos',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                      _resumenChip(
+                        'Turnos: ${horarioProvider.totalTurnosRegistrados}',
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'Registros: $horariosActivos',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                      _resumenChip(
+                        'Registros: ${horarioProvider.horarios.length}',
                       ),
                     ],
                   ),
@@ -221,16 +149,68 @@ class _HorariosScreenState extends State<HorariosScreen> {
               ),
             ),
             const SizedBox(height: 18),
+
+            if (horarioProvider.isLoading || areaProvider.isLoading)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: LinearProgressIndicator(
+                  color: const Color(0xff1B5E20),
+                  backgroundColor: Colors.white,
+                ),
+              ),
+
+            // ── NUEVO: banner de error visible ──────────────────────────
+            // Antes, cualquier fallo al hablar con el servidor (404, 500,
+            // timeout, JSON inválido, etc.) quedaba guardado en
+            // `horarioProvider.error` pero NUNCA se mostraba en pantalla,
+            // así que la vista se veía "vacía" sin ninguna pista de qué
+            // pasó. Este bloque lo hace visible y da un botón de reintento.
+            if (horarioProvider.error != null)
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xffFDECEA),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        horarioProvider.error!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => horarioProvider.cargarHorarios(),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Toggle Horarios / Áreas ────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 16,
-                    offset: const Offset(0, 8),
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
@@ -238,49 +218,53 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          mostrarHorarios = true;
-                        });
-                      },
-                      icon: const Icon(Icons.schedule_outlined),
-                      label: const Text('Horarios'),
+                      onPressed: () => setState(() => mostrarHorarios = true),
+                      icon: const Icon(Icons.schedule_outlined, size: 20),
+                      label: const Text(
+                        'Horarios',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: mostrarHorarios
                             ? const Color(0xff1B5E20)
-                            : Colors.white,
+                            : Colors.transparent,
                         foregroundColor: mostrarHorarios
                             ? Colors.white
-                            : Colors.black87,
+                            : const Color(0xff64748B),
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        setState(() {
-                          mostrarHorarios = false;
-                        });
+                        setState(() => mostrarHorarios = false);
+                        // Refresca las estadísticas de áreas al entrar al módulo
+                        context.read<AreaProvider>().cargarAreas();
                       },
-                      icon: const Icon(Icons.agriculture),
-                      label: const Text('Áreas'),
+                      icon: const Icon(Icons.agriculture, size: 20),
+                      label: const Text(
+                        'Áreas',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: !mostrarHorarios
                             ? const Color(0xff1B5E20)
-                            : Colors.white,
+                            : Colors.transparent,
                         foregroundColor: !mostrarHorarios
                             ? Colors.white
-                            : Colors.black87,
+                            : const Color(0xff64748B),
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                     ),
@@ -288,69 +272,88 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 22),
-            if (mostrarHorarios)
-              _buildHorarios(context)
-            else
-              _buildAreas(context),
+            const SizedBox(height: 20),
+
+            // ANIMATIONS: transición suave al cambiar de módulo
+            PageTransitionSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder:
+                  (child, primaryAnimation, secondaryAnimation) =>
+                      FadeThroughTransition(
+                        animation: primaryAnimation,
+                        secondaryAnimation: secondaryAnimation,
+                        child: child,
+                      ),
+              child: mostrarHorarios
+                  ? _buildHorarios(context, horariosActivos, horarioProvider)
+                  : _buildAreas(context, areasActivas, areaProvider),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHorarios(BuildContext context) {
-    final int totalRegistros = _horarios.length;
-    final int totalTurnos = _horarios
-        .map((horario) => horario.turno)
-        .toSet()
-        .length;
-    final int horariosActivos = _horarios.length;
+  // ── MÓDULO HORARIOS ───────────────────────────────────────────────────────
+  Widget _buildHorarios(
+    BuildContext context,
+    List<Horario> horarios,
+    HorarioProvider provider,
+  ) {
+    final totalRegistros = provider.horarios.length;
+    final totalTurnos = provider.totalTurnosRegistrados;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        // Stats
+        Row(
           children: [
-            SizedBox(
-              width: 170,
+            Expanded(
               child: DashboardStatCard(
-                valor: '$horariosActivos',
-                titulo: 'Horarios Activos',
-                icono: Icons.check_circle_outline,
+                valor: '$totalRegistros',
+                titulo: 'Horarios activos',
+                icono: Icons.schedule_outlined,
+                color: const Color(0xff2E7D32),
               ),
             ),
-            SizedBox(
-              width: 170,
+            const SizedBox(width: 10),
+            Expanded(
               child: DashboardStatCard(
                 valor: '$totalRegistros',
                 titulo: 'Empleados',
                 icono: Icons.people,
+                color: const Color(0xff1565C0),
               ),
             ),
-            SizedBox(
-              width: 170,
+            const SizedBox(width: 10),
+            Expanded(
               child: DashboardStatCard(
                 valor: '$totalTurnos',
                 titulo: 'Turnos',
                 icono: Icons.calendar_month,
+                color: const Color(0xffF57C00),
               ),
             ),
           ],
         ),
         const SizedBox(height: 20),
+
+        // FL_CHART: gráfica de horas trabajadas por turno
+        _buildGraficaTurnos(horarios),
+        const SizedBox(height: 20),
+
+        // PROVIDER: filtros que actualizan la lista en tiempo real
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -358,46 +361,311 @@ class _HorariosScreenState extends State<HorariosScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Filtros',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                'Filtros por Turno',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xff1E293B),
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  FiltroChipWidget(
-                    texto: 'Todos',
-                    seleccionado: true,
-                    onTap: () {},
-                    icon: Icons.grid_view,
-                  ),
-                  FiltroChipWidget(
-                    texto: 'Matutino',
-                    seleccionado: false,
-                    onTap: () {},
-                    icon: Icons.wb_sunny,
-                  ),
-                  FiltroChipWidget(
-                    texto: 'Vespertino',
-                    seleccionado: false,
-                    onTap: () {},
-                    icon: Icons.nights_stay,
-                  ),
-                ],
+                spacing: 8,
+                runSpacing: 8,
+                children: ['Todos', 'Matutino', 'Vespertino', 'Nocturno']
+                    .map(
+                      (turno) => FiltroChipWidget(
+                        texto: turno,
+                        seleccionado: provider.filtroTurno == turno,
+                        onTap: () => provider.setFiltroTurno(turno),
+                        icon: turno == 'Todos'
+                            ? Icons.grid_view
+                            : turno == 'Matutino'
+                            ? Icons.wb_sunny
+                            : turno == 'Vespertino'
+                            ? Icons.nights_stay
+                            : Icons.bedtime,
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           ),
         ),
         const SizedBox(height: 20),
+
+        // ── TABLA DE EMPLEADOS (Rediseño visual integrado) ───────────────────
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xffE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.badge_outlined,
+                      color: Color(0xff1B5E20),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tabla de Empleados',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Color(0xff1E293B),
+                          ),
+                        ),
+                        Text(
+                          '$totalRegistros asignaciones vigentes',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ── Se quitó el botón "Filtrar Fecha": no filtraba nada,
+                  // solo mostraba un toast decorativo. ──
+                ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _mostrarModalNuevoHorario(context, provider);
+                },
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                label: const Text(
+                  'Agregar nuevo horario',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff1B5E20),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Lista de tarjetas de empleados/horarios con FLUTTER_SLIDABLE
+        ...horarios.map(
+          (horario) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Slidable(
+              key: ValueKey(horario.nombre),
+              endActionPane: ActionPane(
+                motion: const BehindMotion(),
+                children: [
+                  SlidableAction(
+                    onPressed: (_) {
+                      provider.eliminarHorario(horario.id!);
+                      Fluttertoast.showToast(
+                        msg: '"${horario.nombre}" eliminado',
+                        toastLength: Toast.LENGTH_SHORT,
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                    },
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    icon: Icons.delete,
+                    label: 'Eliminar',
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ],
+              ),
+              child: HorarioCard(
+                horario: horario,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: context.read<HorarioProvider>(),
+                      child: HorarioDetailScreen(horario: horario),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── MÓDULO ÁREAS ──────────────────────────────────────────────────────────
+  Widget _buildAreas(
+    BuildContext context,
+    List<Area> areasList,
+    AreaProvider areaProvider,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xff2E7D32), Color(0xff43A047)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.grid_view_rounded,
+                  size: 30,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Asignación de Áreas',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Supervisión inteligente agrícola',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // DROPDOWN_SEARCH: búsqueda de área/responsable
+        DropdownSearch<String>(
+          items: (filter, infiniteScrollProps) {
+            final nombres = areasList.map((a) => a.area).toList();
+
+            if (filter.isEmpty) return nombres;
+
+            return nombres
+                .where((n) => n.toLowerCase().contains(filter.toLowerCase()))
+                .toList();
+          },
+
+          onSelected: (value) {
+            if (value != null) {
+              areaProvider.setBusqueda(value);
+            } else {
+              areaProvider.setBusqueda('');
+            }
+          },
+
+          decoratorProps: const DropDownDecoratorProps(
+            decoration: InputDecoration(
+              labelText: 'Buscar área o responsable',
+              prefixIcon: Icon(Icons.search),
+            ),
+          ),
+
+          popupProps: const PopupProps.menu(
+            showSearchBox: true,
+            searchFieldProps: TextFieldProps(
+              decoration: InputDecoration(hintText: 'Buscar...'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // FLUTTER_STAGGERED_GRID_VIEW: resumen con grid dinámico
+        // ── Ahora usa /areas/resumen-dia en vez de calcularlo localmente ──
+        StaggeredGrid.count(
+          crossAxisCount: 3,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          children: [
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _summaryCard(
+                icon: Icons.pending_actions,
+                title: '${areaProvider.pendientes}',
+                subtitle: 'Pendientes',
+                color: Colors.orange,
+              ),
+            ),
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _summaryCard(
+                icon: Icons.autorenew_rounded,
+                title: '${areaProvider.enProgreso}',
+                subtitle: 'En progreso',
+                color: Colors.blue,
+              ),
+            ),
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _summaryCard(
+                icon: Icons.check_circle_outline_rounded,
+                title: '${areaProvider.completadas}',
+                subtitle: 'Completadas',
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Panel + botón agregar
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
@@ -405,375 +673,262 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.table_chart, color: Color(0xff1B5E20)),
-              const SizedBox(width: 12),
               const Expanded(
-                child: Text(
-                  'Tabla de Empleados',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ),
-              Text(
-                '$totalRegistros registros',
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerRight,
-          child: ElevatedButton.icon(
-            onPressed: _addHorario,
-            icon: const Icon(Icons.add),
-            label: const Text('Agregar empleado'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xff1B5E20),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            ),
-          ),
-        ),
-        const SizedBox(height: 22),
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Alertas importantes',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 16),
-              AlertaCard(
-                color: Colors.orange,
-                icon: Icons.warning_amber_rounded,
-                texto: 'Horas extra detectadas',
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const AlertDialog(
-                      title: Text('Horas extra detectadas'),
-                      content: Text(
-                        'Juan Pérez registró 4 horas extra durante la semana.',
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              AlertaCard(
-                color: Colors.red,
-                icon: Icons.error_outline_rounded,
-                texto: 'Conflicto de horarios',
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const AlertDialog(
-                      title: Text('Conflicto de horarios'),
-                      content: Text(
-                        'Existe un conflicto entre los horarios asignados a María López.',
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              AlertaCard(
-                color: Colors.green,
-                icon: Icons.sync_alt_rounded,
-                texto: 'Cambio de turno pendiente',
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const AlertDialog(
-                      title: Text('Cambio de turno pendiente'),
-                      content: Text(
-                        'Carlos Mendoza solicitó un cambio de turno para la próxima semana.',
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        ..._horarios.map(
-          (horario) => HorarioCard(
-            horario: horario,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HorarioDetailScreen(horario: horario),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAreas(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xff1B5E20), Color(0xff43A047)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.14),
-                blurRadius: 24,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.grid_view,
-                  size: 34,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'Asignación de Áreas',
+                      'Panel de Supervisión',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: Color(0xff1E293B),
                       ),
                     ),
-                    SizedBox(height: 6),
+                    SizedBox(height: 4),
                     Text(
-                      'Supervisión inteligente agrícola',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(Icons.dashboard, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _summaryCard(
-              icon: Icons.pending_actions,
-              title:
-                  '${_areas.where((area) => area.estado.toLowerCase().contains("pendiente")).length}',
-              subtitle: 'Pendientes',
-              color: Colors.orange,
-            ),
-            _summaryCard(
-              icon: Icons.check_circle,
-              title:
-                  '${_areas.where((area) => area.estado.toLowerCase().contains("completado")).length}',
-              subtitle: 'Completadas',
-              color: Colors.green,
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          'Centro de alertas',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 14),
-        NotificacionCard(
-          texto: 'Actividad atrasada detectada',
-          descripcion:
-              'Revisa el área pendiente para evitar retrasos en la cosecha.',
-          color: Colors.red,
-          icono: Icons.warning_amber_rounded,
-          onTap: () {
-            showDialog(
-              context: context,
-              builder: (_) => const AlertDialog(
-                title: Text('Actividad atrasada detectada'),
-                content: Text(
-                  'Se ha detectado una actividad atrasada en el Invernadero A. Coordina con el equipo para recuperar el tiempo.',
-                ),
-              ),
-            );
-          },
-        ),
-        NotificacionCard(
-          texto: 'Cambio de asignación realizado',
-          descripcion: 'La asignación ha sido actualizada correctamente.',
-          color: Colors.blue,
-          icono: Icons.swap_horiz,
-          onTap: () {
-            showDialog(
-              context: context,
-              builder: (_) => const AlertDialog(
-                title: Text('Cambio de asignación realizado'),
-                content: Text(
-                  'El personal ha sido reasignado y los turnos han sido actualizados en el sistema.',
-                ),
-              ),
-            );
-          },
-        ),
-        NotificacionCard(
-          texto: 'Sobrecarga detectada en Área B',
-          descripcion: 'El área B tiene más tareas asignadas de las previstas.',
-          color: Colors.amber,
-          icono: Icons.error_outline,
-          onTap: () {
-            showDialog(
-              context: context,
-              builder: (_) => const AlertDialog(
-                title: Text('Sobrecarga detectada en Área B'),
-                content: Text(
-                  'El área B tiene una asignación excesiva de tareas. Revisa las prioridades y redistribuye el trabajo.',
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Panel de supervisión',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Controla tus invernaderos y agrega nuevos espacios rápidamente.',
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                      'Controla tus invernaderos instalados.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: _addInvernadero,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar'),
+                onPressed: () => mostrarModalNuevaArea(context, areaProvider),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text(
+                  'Añadir',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xff1B5E20),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
+                    horizontal: 16,
+                    vertical: 12,
                   ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 22),
-        Column(
-          children: _areas
+
+        const SizedBox(height: 16),
+
+        // FLUTTER_STAGGERED_GRID_VIEW: tarjetas de áreas con FLUTTER_SLIDABLE
+        StaggeredGrid.count(
+          crossAxisCount: 1,
+          mainAxisSpacing: 12,
+          children: areasList
               .map(
-                (area) => AreaCard(
-                  area: area,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AreaDetailScreen(area: area),
+                (area) => StaggeredGridTile.fit(
+                  crossAxisCellCount: 1,
+                  child: Slidable(
+                    key: ValueKey(area.id ?? area.area),
+                    endActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      children: [
+                        SlidableAction(
+                          onPressed: (_) => areaProvider.eliminarArea(area),
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          icon: Icons.delete,
+                          label: 'Eliminar',
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ],
+                    ),
+                    child: AreaCard(
+                      area: area,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChangeNotifierProvider.value(
+                            value: areaProvider,
+                            child: AreaDetailScreen(area: area),
+                          ),
+                        ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               )
               .toList(),
         ),
+        const SizedBox(height: 24),
+
+        // ── FL_CHART/PERCENT_INDICATOR: ahora con /areas/productividad-semanal ──
+        _buildProductividadSemanal(areaProvider),
         const SizedBox(height: 20),
-        _buildProductividadSemanal(context),
-        const SizedBox(height: 20),
-        _buildResumenDelDia(context),
+        // ── Resumen del día: ahora con /areas/resumen-dia ──
+        _buildResumenDelDia(context, areaProvider, areasList),
       ],
     );
   }
 
-  Widget _buildProductividadSemanal(BuildContext context) {
-    final List<Map<String, dynamic>> cultivos = [
-      {'nombre': 'Tomate', 'valor': 0.9, 'color': Colors.green},
-      {'nombre': 'Pepino', 'valor': 0.6, 'color': Colors.orange},
-      {'nombre': 'Chile', 'valor': 0.8, 'color': Colors.blue},
-    ];
+  // ── FL_CHART: gráfica de barras de turnos ──────────────────────────────
+  Widget _buildGraficaTurnos(List<Horario> horarios) {
+    final Map<String, int> conteo = {};
+    for (final h in horarios) {
+      conteo[h.turno] = (conteo[h.turno] ?? 0) + 1;
+    }
+    final turnos = conteo.keys.toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Distribución de Turnos',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff1E293B),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: turnos.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Sin datos de turnos aún',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  )
+                : BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: (horarios.length + 2).toDouble(),
+                      barTouchData: BarTouchData(enabled: true),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: (value, _) => Text(
+                              '${value.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, _) {
+                              final i = value.toInt();
+                              if (i < 0 || i >= turnos.length) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  turnos[i],
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xff475569),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        rightTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: turnos.asMap().entries.map((e) {
+                        const colors = [
+                          Color(0xff1E88E5),
+                          Color(0xffFB8C00),
+                          Color(0xff6A1B9A),
+                        ];
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: conteo[e.value]!.toDouble(),
+                              color: colors[e.key % colors.length],
+                              width: 24,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Productividad semanal con PERCENT_INDICATOR ────────────────────────
+  // Ahora consume GET /areas/productividad-semanal (agrupado por cultivo_id)
+  // en vez de datos fijos. El nombre del cultivo se resuelve contra la
+  // lista `provider.cultivos` cargada para el formulario; si aún no existe
+  // la ruta /cultivos en tu backend, se muestra "Cultivo #id" como fallback.
+  Widget _buildProductividadSemanal(AreaProvider provider) {
+    final datos = provider.productividadSemanal;
+
+    String nombreCultivo(dynamic cultivoId) {
+      final match = provider.cultivos.firstWhere(
+        (c) => '${c['id']}' == '$cultivoId',
+        orElse: () => {},
+      );
+      if (match.isNotEmpty && match['name'] != null) {
+        return match['name'];
+      }
+      return 'Cultivo #$cultivoId';
+    }
+
+    double parseProductividad(dynamic valor) {
+      if (valor is num) return valor.toDouble();
+      return double.tryParse('$valor') ?? 0.0;
+    }
+
+    Color colorPorValor(double v) {
+      if (v >= 0.75) return Colors.green;
+      if (v >= 0.5) return Colors.blue;
+      return Colors.orange;
+    }
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 18,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -786,153 +941,181 @@ class _HorariosScreenState extends State<HorariosScreen> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: const Color(0xffE8F5E9),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.bar_chart, color: Color(0xff1B5E20)),
               ),
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'Productividad semanal',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  'Productividad Semanal',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff1E293B),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const Text(
-            'Revisa el rendimiento de cada cultivo y detecta áreas que requieren atención.',
-            style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
+            'Rendimiento promedio por cultivo, calculado en el servidor.',
+            style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
           ),
-          const SizedBox(height: 18),
-          ...cultivos.map((cultivo) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildProductividadRow(
-                cultivo['nombre'] as String,
-                cultivo['valor'] as double,
-                cultivo['color'] as Color,
+          const SizedBox(height: 20),
+          if (datos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Text(
+                'Aún no hay datos de productividad por cultivo.',
+                style: TextStyle(color: Colors.grey),
               ),
-            );
-          }),
+            )
+          else
+            ...datos.map((item) {
+              final valor = parseProductividad(item['productividad']);
+              final color = colorPorValor(valor);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          item['cultivo_nombre'] ??
+                              'Cultivo #${item['cultivo_id']}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xff334155),
+                          ),
+                        ),
+                        Text(
+                          '${valor.round()}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearPercentIndicator(
+                      lineHeight: 10.0,
+                      percent: valor.clamp(0.0, 1.0),
+                      animation: true,
+                      animationDuration: 900,
+                      progressColor: color,
+                      backgroundColor: const Color(0xffEDF4F0),
+                      barRadius: const Radius.circular(10),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildProductividadRow(String cultivo, double valor, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(cultivo, style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(
-              '${(valor * 100).round()}%',
-              style: TextStyle(fontWeight: FontWeight.bold, color: color),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: LinearProgressIndicator(
-            value: valor,
-            minHeight: 10,
-            color: color,
-            backgroundColor: const Color(0xffEDF4F0),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildResumenDelDia(BuildContext context) {
-    final int pendientes = _areas
-        .where((area) => area.estado.toLowerCase().contains('pendiente'))
-        .length;
-    final int completadas = _areas
-        .where((area) => area.estado.toLowerCase().contains('completado'))
-        .length;
-    final int supervision = _areas
-        .where((area) => !area.estado.toLowerCase().contains('completado'))
-        .length;
-    final int productividadGeneral = _areas.isEmpty
-        ? 0
-        : (_areas
-                      .map((area) => area.progreso)
-                      .reduce((value, element) => value + element) /
-                  _areas.length *
-                  100)
-              .round();
+  // ── Resumen del día ────────────────────────────────────────────────────
+  // Ahora usa GET /areas/resumen-dia (vía AreaProvider) en vez de calcular
+  // los totales localmente a partir de la lista filtrada de áreas.
+  Widget _buildResumenDelDia(
+    BuildContext context,
+    AreaProvider areaProvider,
+    List<Area> areasParaHistorial,
+  ) {
+    final pendientes = areaProvider.pendientes;
+    final enProgreso = areaProvider.enProgreso;
+    final completadas = areaProvider.completadas;
+    final totalActividades = pendientes + enProgreso + completadas;
+    final supervision = areaProvider.requierenSupervision;
+    final productividadGeneral = areaProvider.productividadGeneral.round();
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: const Color(0xffE8F5E9),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.dashboard, color: Color(0xff1B5E20)),
+              Icon(
+                Icons.dashboard_customize_outlined,
+                color: Color(0xff1B5E20),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Resumen del día',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              SizedBox(width: 12),
+              Text(
+                'Resumen del Día',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xff1B5E20),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           _buildResumenRow(
             Icons.pending_actions,
             '$pendientes actividades pendientes',
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
-            Icons.check_circle,
+            Icons.autorenew_rounded,
+            '$enProgreso actividades en progreso',
+          ),
+          const SizedBox(height: 12),
+          _buildResumenRow(
+            Icons.check_circle_outline,
             '$completadas actividades completadas',
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
             Icons.warning_amber_rounded,
-            '$supervision áreas requieren supervisión',
+            '$supervision de $totalActividades actividades requieren supervisión',
           ),
           const SizedBox(height: 12),
           _buildResumenRow(
-            Icons.bar_chart,
+            Icons.moving_rounded,
             'Productividad general: $productividadGeneral%',
           ),
           const SizedBox(height: 22),
           ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
+              // Trae el historial real desde /areas/historial antes de navegar
+              await areaProvider.cargarHistorial();
+              if (!context.mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => AreaHistorialScreen(areas: _areas),
+                  builder: (_) => AreaHistorialScreen(
+                    areas: areaProvider.historial.isNotEmpty
+                        ? areaProvider.historial
+                        : areasParaHistorial,
+                  ),
                 ),
               );
             },
-            icon: const Icon(Icons.history),
-            label: const Text('Reporte de actividades'),
+            icon: const Icon(Icons.history_toggle_off_rounded, size: 20),
+            label: const Text(
+              'Reporte Completo de Actividades',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xff1B5E20),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(52),
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
           ),
@@ -945,10 +1128,10 @@ class _HorariosScreenState extends State<HorariosScreen> {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: const Color(0xff1B5E20)),
         ),
@@ -956,10 +1139,32 @@ class _HorariosScreenState extends State<HorariosScreen> {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xff2E7D32),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _resumenChip(String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        texto,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
@@ -970,16 +1175,15 @@ class _HorariosScreenState extends State<HorariosScreen> {
     required Color color,
   }) {
     return Container(
-      width: 170,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 18,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -987,25 +1191,44 @@ class _HorariosScreenState extends State<HorariosScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff1E293B),
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(color: Colors.grey, fontSize: 14),
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
     );
   }
-}
+
+  // ── NAVEGACIÓN A LA PANTALLA DE NUEVO HORARIO ────────────────────────────
+  // Abre el formulario completo como modal centrado, en modo creación
+  // (horario: null).
+  void _mostrarModalNuevoHorario(
+    BuildContext context,
+    HorarioProvider provider,
+  ) {
+    provider.cargarEmpleados();
+    HorarioFormScreen.show(context, provider: provider);
+  }
+} // <-- CIERRE de _HorariosScreenState

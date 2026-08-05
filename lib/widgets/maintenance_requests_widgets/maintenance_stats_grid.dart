@@ -12,9 +12,9 @@ class MaintenanceStatsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     // Calculamos las estadísticas basándonos en la lista que recibe el widget
     int total = requests.length;
-    int urgentes = requests.where((r) => r.priority == 'alta').length;
-    int pendientes = requests.where((r) => r.status == 'pendiente').length;
-    int enProgreso = requests.where((r) => r.status == 'en_progreso').length;
+    int urgentes = requests.where((r) => r.priority == 'Correctivo' || r.priority == 'alta').length;
+    int pendientes = requests.where((r) => r.status == 'Pendiente' || r.status == 'pendiente').length;
+    int enProgreso = requests.where((r) => r.status == 'En proceso' || r.status == 'en_progreso').length;
 
     return GridView.count(
       crossAxisCount: 2,
