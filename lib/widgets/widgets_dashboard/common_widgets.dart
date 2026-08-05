@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../screens/screen_reports/reports_page.dart';
 
 class SectionTitle extends StatelessWidget {
   final String title;
@@ -10,7 +9,12 @@ class SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        letterSpacing: -0.5,
+        color: Color(0xFF263238),
+      ),
     );
   }
 }
@@ -18,13 +22,13 @@ class SectionTitle extends StatelessWidget {
 class InfoRow extends StatelessWidget {
   final String title;
   final String value;
-  final VoidCallback? onTap; // <-- 1. Agregamos el callback para detectar clics
+  final VoidCallback? onTap;
 
   const InfoRow({
     super.key,
     required this.title,
     required this.value,
-    this.onTap, // <-- 2. Lo sumamos al constructor opcional
+    this.onTap,
   });
 
   @override
@@ -33,78 +37,57 @@ class InfoRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Material(
-        color: Colors.transparent, // Mantiene el fondo blanco del Container
+        color: Colors.transparent,
         child: InkWell(
-          onTap: onTap, // <-- 3. Asignamos la acción al tocar la fila
-          borderRadius: BorderRadius.circular(
-            18,
-          ), // Evita que el efecto visual se salga de las esquinas
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(fontSize: 16)),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                // Evita que el título empuje la fila si es extenso
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF37474F),
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ReportButton extends StatelessWidget {
-  const ReportButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    // Cambié GestureDetector por InkWell para que al pulsar el botón principal
-    // también muestre el feedback visual de pulsación nativo de Android/iOS.
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xff1B5E20),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ReportsPage()),
-            );
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: const Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.description, color: Colors.white),
-                SizedBox(width: 10),
-                Text(
-                  "Ver Reportes Detallados",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B5E20),
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                SizedBox(width: 10),
-                Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
+                if (onTap != null) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
               ],
             ),
           ),

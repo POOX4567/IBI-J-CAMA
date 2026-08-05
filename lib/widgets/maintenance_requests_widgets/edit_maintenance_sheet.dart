@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ibi/data/mock_data.dart';
 import 'package:ibi/services/maintenance_service.dart';
-import 'package:ibi/models/invernadero_model.dart';
 
 class EditMaintenanceSheet extends StatefulWidget {
   final MaintenanceService service;
@@ -22,10 +21,8 @@ class EditMaintenanceSheet extends StatefulWidget {
 class _EditMaintenanceSheetState extends State<EditMaintenanceSheet> {
   late final TextEditingController _tituloController;
   late final TextEditingController _descripcionController;
-  int? _invernaderoSeleccionado;
-  List<Invernadero> _invernaderos = [];
+  late String _tipo;
   bool _isLoading = false;
-  bool _cargandoInvernaderos = true;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -34,27 +31,7 @@ class _EditMaintenanceSheetState extends State<EditMaintenanceSheet> {
     _tituloController = TextEditingController(text: widget.request.title);
     _descripcionController =
         TextEditingController(text: widget.request.description);
-    _cargarInvernaderos();
-  }
-
-  Future<void> _cargarInvernaderos() async {
-    try {
-      final invernaderos = await widget.service.fetchInvernaderos();
-      if (mounted) {
-        final actual = invernaderos.where(
-          (i) => i.nombre == widget.request.greenhouse,
-        );
-        setState(() {
-          _invernaderos = invernaderos;
-          _invernaderoSeleccionado = actual.isNotEmpty
-              ? actual.first.id
-              : (invernaderos.isNotEmpty ? invernaderos.first.id : null);
-          _cargandoInvernaderos = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _cargandoInvernaderos = false);
-    }
+    _tipo = widget.request.priority;
   }
 
   @override
@@ -66,7 +43,6 @@ class _EditMaintenanceSheetState extends State<EditMaintenanceSheet> {
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_invernaderoSeleccionado == null) return;
 
     setState(() => _isLoading = true);
 
@@ -75,7 +51,7 @@ class _EditMaintenanceSheetState extends State<EditMaintenanceSheet> {
         id: int.parse(widget.request.id),
         titulo: _tituloController.text.trim(),
         descripcion: _descripcionController.text.trim(),
-        invernaderoId: _invernaderoSeleccionado!,
+        tipo: _tipo,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -160,34 +136,26 @@ class _EditMaintenanceSheetState extends State<EditMaintenanceSheet> {
                     (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
               ),
               const SizedBox(height: 12),
-              _cargandoInvernaderos
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child:
-                          Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  : DropdownButtonFormField<int>(
-                      value: _invernaderoSeleccionado,
-                      decoration: const InputDecoration(
-                        labelText: 'Invernadero',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      items: _invernaderos.map((inv) {
-                        return DropdownMenuItem(
-                          value: inv.id,
-                          child: Text(inv.nombre),
-                        );
-                      }).toList(),
-                      validator: (v) =>
-                          v == null ? 'Selecciona un invernadero' : null,
-                      onChanged: (val) {
-                        setState(() => _invernaderoSeleccionado = val);
-                      },
-                    ),
+              DropdownButtonFormField<String>(
+                value: _tipo,
+                decoration: const InputDecoration(
+                  labelText: 'Tipo',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Preventivo', child: Text('Preventivo')),
+                  DropdownMenuItem(value: 'Correctivo', child: Text('Correctivo')),
+                ],
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Selecciona un tipo' : null,
+                onChanged: (val) {
+                  if (val != null) setState(() => _tipo = val);
+                },
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isLoading ? null : _guardar,

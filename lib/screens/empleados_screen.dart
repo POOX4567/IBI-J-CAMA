@@ -16,16 +16,25 @@ class EmpleadosScreen extends StatefulWidget {
 }
 
 class _EmpleadosScreenState extends State<EmpleadosScreen> {
-  String _selectedFilter = 'Todo el Personal';
+  String _selectedFilter = 'Todo';
   List<Empleado> _empleados = [];
-  List<String> _invernaderosUnicos = [];
+  List<Empleado> _empleadosFiltrados = [];
   bool _isLoading = true;
   String? _errorMessage;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _cargarEmpleados();
+    _searchController.addListener(_filtrarEmpleados);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_filtrarEmpleados);
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarEmpleados() async {
@@ -47,9 +56,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
         },
       );
 
-      print('STATUS: ${response.statusCode}');
-      print('BODY: ${response.body}');
-
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         if (data['success'] == true) {
@@ -58,17 +64,9 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               .map((json) => Empleado.fromJson(json))
               .toList();
 
-          // Obtener lista única de invernaderos para filtros
-          Set<String> invernaderosSet = {};
-          for (var empleado in empleados) {
-            for (var inv in empleado.invernaderos) {
-              invernaderosSet.add(inv['nombre'].toString());
-            }
-          }
-          _invernaderosUnicos = invernaderosSet.toList();
-
           setState(() {
             _empleados = empleados;
+            _empleadosFiltrados = empleados;
             _isLoading = false;
           });
         } else {
@@ -91,27 +89,27 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     }
   }
 
-  // Fecha actual formateada con intl
+  void _filtrarEmpleados() {
+    final query = _searchController.text.toLowerCase().trim();
+
+    setState(() {
+      if (query.isEmpty) {
+        _empleadosFiltrados = _empleados;
+      } else {
+        _empleadosFiltrados = _empleados.where((empleado) {
+          return empleado.nombre.toLowerCase().contains(query) ||
+              empleado.rol.toLowerCase().contains(query) ||
+              empleado.correo.toLowerCase().contains(query) ||
+              empleado.zona.toLowerCase().contains(query);
+        }).toList();
+      }
+    });
+  }
+
   String get _fechaActual {
     final now = DateTime.now();
     final formatter = DateFormat('EEEE, d \'de\' MMMM \'de\' yyyy', 'es');
     return formatter.format(now);
-  }
-
-  List<Empleado> get _empleadosFiltrados {
-    if (_selectedFilter == 'Todo el Personal') {
-      return _empleados;
-    } else {
-      // Filtrar por invernadero seleccionado
-      return _empleados.where((e) {
-        for (var inv in e.invernaderos) {
-          if (inv['nombre']?.toString() == _selectedFilter) {
-            return true;
-          }
-        }
-        return false;
-      }).toList();
-    }
   }
 
   Future<void> _hacerLlamada(String numero) async {
@@ -139,11 +137,18 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Scaffold(
       body: Column(
         children: [
+          // ============================================================
+          // HEADER RESPONSIVO
+          // ============================================================
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+            width: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
@@ -154,10 +159,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Directorio de Empleados',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: isSmallScreen ? 20 : 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -165,18 +170,28 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _fechaActual,
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 10 : 12,
+                    color: Colors.white70,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Administrando ${_empleados.length} especialistas de invernadero',
-                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  _empleadosFiltrados.length == _empleados.length
+                      ? 'Administrando ${_empleados.length} especialistas de invernadero'
+                      : 'Mostrando ${_empleadosFiltrados.length} de ${_empleados.length} especialistas',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 12 : 14,
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
           ),
 
-          // Filtros dinámicos con scroll horizontal
+          // ============================================================
+          // BARRA DE BÚSQUEDA Y FILTRO "TODO"
+          // ============================================================
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -189,23 +204,105 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
               ],
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('Todo el Personal'),
-                  const SizedBox(width: 12),
-                  ..._invernaderosUnicos.map((invernadero) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: _buildFilterChip(invernadero),
-                    );
-                  }),
-                ],
-              ),
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('Todo'),
+                  selected: _selectedFilter == 'Todo',
+                  onSelected: (bool selected) {
+                    setState(() {
+                      _selectedFilter = 'Todo';
+                      _searchController.clear();
+                      _empleadosFiltrados = _empleados;
+                    });
+                  },
+                  selectedColor: const Color(0xFF2E7D32),
+                  checkmarkColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: _selectedFilter == 'Todo'
+                        ? Colors.white
+                        : const Color(0xFF5D4037),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  backgroundColor: Colors.grey.shade200,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar empleado...',
+                        hintStyle: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          size: 20,
+                          color: Colors.grey,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.clear,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _filtrarEmpleados();
+                                  setState(() {
+                                    _selectedFilter = 'Todo';
+                                  });
+                                },
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        isDense: true,
+                      ),
+                      onChanged: (_) {
+                        setState(() {
+                          _selectedFilter = 'Búsqueda';
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                if (_searchController.text.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      '${_empleadosFiltrados.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
 
+          // ============================================================
+          // LISTA DE EMPLEADOS
+          // ============================================================
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -243,11 +340,36 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                       ],
                     ),
                   )
-                : _empleados.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay empleados registrados',
-                      style: TextStyle(fontSize: 16, color: Color(0xFF5D4037)),
+                : _empleadosFiltrados.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchController.text.isNotEmpty
+                              ? 'No se encontraron empleados con "${_searchController.text}"'
+                              : 'No hay empleados registrados',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF5D4037),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (_searchController.text.isNotEmpty)
+                          TextButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              _filtrarEmpleados();
+                            },
+                            child: const Text('Limpiar búsqueda'),
+                          ),
+                      ],
                     ),
                   )
                 : ListView.builder(
@@ -264,31 +386,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label) {
-    return FilterChip(
-      label: Text(label),
-      selected: _selectedFilter == label,
-      onSelected: (bool selected) {
-        setState(() {
-          _selectedFilter = label;
-        });
-      },
-      selectedColor: const Color(0xFF2E7D32),
-      checkmarkColor: Colors.white,
-      labelStyle: TextStyle(
-        color: _selectedFilter == label
-            ? Colors.white
-            : const Color(0xFF5D4037),
-        fontWeight: FontWeight.w500,
-      ),
-      backgroundColor: Colors.grey.shade200,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    );
-  }
-
   Widget _buildEmpleadoCard(Empleado empleado) {
-    // Obtener lista de invernaderos del empleado
     String invernaderosTexto = empleado.invernaderos.isEmpty
         ? 'Sin invernadero'
         : empleado.invernaderos.map((e) => e['nombre'].toString()).join(', ');
@@ -321,6 +419,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipOval(
                       child: Image.network(
@@ -409,7 +508,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Rol
                 Text(
                   empleado.rol,
                   style: const TextStyle(
@@ -419,7 +517,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   ),
                 ),
 
-                // Invernaderos
                 Text(
                   invernaderosTexto,
                   style: const TextStyle(
@@ -430,7 +527,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
 
                 const Divider(height: 24, thickness: 1),
 
-                // Turno actual
                 Row(
                   children: [
                     const Icon(
@@ -462,7 +558,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Teléfono
                 Row(
                   children: [
                     const Icon(Icons.phone, size: 16, color: Color(0xFF5D4037)),
@@ -505,8 +600,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                                 nombre: empleado.nombre,
                                 rol: empleado.rol,
                                 fotoUrl: empleado.fotoUrl,
-                                empleadoId:
-                                    empleado.id, // 👈 Nuevo campo requerido
+                                empleadoId: empleado.id,
                               ),
                             ),
                           );

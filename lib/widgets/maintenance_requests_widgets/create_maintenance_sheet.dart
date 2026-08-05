@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ibi/services/maintenance_service.dart';
 import 'package:ibi/models/invernadero_model.dart';
+import 'package:ibi/models/employee_model.dart';
 
 class CreateMaintenanceSheet extends StatefulWidget {
   final MaintenanceService service;
@@ -22,14 +23,18 @@ class _CreateMaintenanceSheetState extends State<CreateMaintenanceSheet> {
   String _tipo = 'Preventivo';
   int? _invernaderoSeleccionado;
   List<Invernadero> _invernaderos = [];
+  int? _empleadoSeleccionado;
+  List<Employee> _empleados = [];
   bool _isLoading = false;
   bool _cargandoInvernaderos = true;
+  bool _cargandoEmpleados = true;
   final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
     _cargarInvernaderos();
+    _cargarEmpleados();
   }
 
   Future<void> _cargarInvernaderos() async {
@@ -44,6 +49,22 @@ class _CreateMaintenanceSheetState extends State<CreateMaintenanceSheet> {
     } catch (_) {
       if (mounted) {
         setState(() => _cargandoInvernaderos = false);
+      }
+    }
+  }
+
+  Future<void> _cargarEmpleados() async {
+    try {
+      final empleados = await widget.service.fetchEmployees();
+      if (mounted) {
+        setState(() {
+          _empleados = empleados;
+          _cargandoEmpleados = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _cargandoEmpleados = false);
       }
     }
   }
@@ -66,6 +87,7 @@ class _CreateMaintenanceSheetState extends State<CreateMaintenanceSheet> {
         descripcion: _descripcionController.text.trim(),
         tipo: _tipo,
         invernaderoId: _invernaderoSeleccionado!,
+        agricultorId: _empleadoSeleccionado,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -170,6 +192,38 @@ class _CreateMaintenanceSheetState extends State<CreateMaintenanceSheet> {
                   if (val != null) setState(() => _tipo = val);
                 },
               ),
+              const SizedBox(height: 12),
+              _cargandoEmpleados
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : DropdownButtonFormField<int>(
+                      value: _empleadoSeleccionado,
+                      decoration: const InputDecoration(
+                        labelText: 'Asignar a',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int>(
+                          value: null,
+                          child: Text('Sin asignar'),
+                        ),
+                        ..._empleados.map((emp) {
+                          return DropdownMenuItem<int>(
+                            value: emp.id,
+                            child: Text(emp.nombre),
+                          );
+                        }),
+                      ],
+                      onChanged: (val) {
+                        setState(() => _empleadoSeleccionado = val);
+                      },
+                    ),
               const SizedBox(height: 12),
               _cargandoInvernaderos
                   ? const Padding(
