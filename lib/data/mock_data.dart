@@ -35,7 +35,7 @@ class MaintenanceRequest {
       status: model.estado,
       description: model.descripcion,
       reportedBy: 'API',
-      assignedTo: null,
+      assignedTo: (model.agricultor != null && model.agricultor != 'Sin asignar') ? model.agricultor : null,
       reportedDate: model.createdAt ?? DateTime.now(),
       device: null,
     );
