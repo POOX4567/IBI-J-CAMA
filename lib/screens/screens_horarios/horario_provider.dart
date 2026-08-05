@@ -7,6 +7,7 @@ class HorarioProvider extends ChangeNotifier {
 
   List<Horario> _horarios = [];
   List<Map<String, dynamic>> _empleados = [];
+  List<Map<String, dynamic>> _actividades = []; // 👈 NUEVO
   String _filtroTurno = 'Todos';
   bool isLoading = false;
   String? error;
@@ -16,6 +17,7 @@ class HorarioProvider extends ChangeNotifier {
 
   List<Horario> get horarios => _horarios;
   List<Map<String, dynamic>> get empleados => _empleados;
+  List<Map<String, dynamic>> get actividades => _actividades; // 👈 NUEVO
 
   String get filtroTurno => _filtroTurno;
   int get totalHorariosActivos => _totalHorariosActivos ?? _horarios.length;
@@ -38,26 +40,55 @@ class HorarioProvider extends ChangeNotifier {
     return null;
   }
 
+  /// 👇 NUEVO: igual que `_nombrePorEmpleadoId` pero para actividades.
+  /// Sirve para rellenar `actividadNombre` cuando el backend no manda la
+  /// relación anidada ('activity') en el listado de horarios.
+  String? _nombrePorActivityId(int activityId) {
+    final match = _actividades.firstWhere(
+      (a) => '${a['id']}' == '$activityId',
+      orElse: () => {},
+    );
+    if (match.isNotEmpty && match['name'] != null) {
+      final nombre = match['name'].toString().trim();
+      if (nombre.isNotEmpty) return nombre;
+    }
+    return null;
+  }
+
   /// Recorre una lista de horarios y, para aquellos cuyo nombre venga vacío
   /// o como 'Sin nombre' (porque el backend no incluyó la relación de
   /// empleado en ese endpoint), rellena el nombre cruzando por empleadoId
-  /// contra la lista de empleados ya cargada.
+  /// contra la lista de empleados ya cargada. También rellena el nombre
+  /// de la actividad cruzando por activityId.
   List<Horario> _rellenarNombres(List<Horario> lista) {
-    if (_empleados.isEmpty) return lista;
-    debugPrint('DEBUG empleados: $_empleados');
     return lista.map((h) {
-      debugPrint(
-        'DEBUG horario id=${h.id} empleadoId=${h.empleadoId} nombreActual=${h.nombre}',
-      );
-      final necesitaNombre = h.nombre.isEmpty || h.nombre == 'Sin nombre';
-      if (!necesitaNombre) return h;
-      final nombreReal = _nombrePorEmpleadoId(h.empleadoId);
-      debugPrint(
-        'DEBUG nombreReal para empleadoId=${h.empleadoId}: $nombreReal',
-      );
-      if (nombreReal != null) return h.copyWith(nombre: nombreReal);
-      return h;
+      var horario = h;
+
+      final necesitaNombreEmpleado =
+          horario.nombre.isEmpty || horario.nombre == 'Sin nombre';
+      if (necesitaNombreEmpleado && _empleados.isNotEmpty) {
+        final nombreReal = _nombrePorEmpleadoId(horario.empleadoId);
+        if (nombreReal != null) horario = horario.copyWith(nombre: nombreReal);
+      }
+
+      final necesitaNombreActividad = horario.actividadNombre.isEmpty;
+      if (necesitaNombreActividad && _actividades.isNotEmpty) {
+        final actividadReal = _nombrePorActivityId(horario.activityId);
+        if (actividadReal != null) {
+          horario = horario.copyWith(actividadNombre: actividadReal);
+        }
+      }
+
+      return horario;
     }).toList();
+  }
+
+  List<Horario> _filtrarPorMisEmpleados(List<Horario> lista) {
+    if (_empleados.isEmpty) return lista;
+    final idsPermitidos = _empleados.map((e) => '${e['id']}').toSet();
+    return lista
+        .where((h) => idsPermitidos.contains('${h.empleadoId}'))
+        .toList();
   }
 
   void setFiltroTurno(String turno) {
@@ -79,8 +110,12 @@ class HorarioProvider extends ChangeNotifier {
       if (_empleados.isEmpty) {
         await cargarEmpleados();
       }
+      if (_actividades.isEmpty) {
+        await cargarActividades();
+      }
       final lista = await _service.obtenerHorarios();
-      _horarios = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _horarios = _filtrarPorMisEmpleados(conNombres); // ← NUEVO
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
@@ -98,8 +133,12 @@ class HorarioProvider extends ChangeNotifier {
       if (_empleados.isEmpty) {
         await cargarEmpleados();
       }
+      if (_actividades.isEmpty) {
+        await cargarActividades();
+      }
       final lista = await _service.horariosPorTurno(turno);
-      _horarios = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _horarios = _filtrarPorMisEmpleados(conNombres); // ← NUEVO
     } catch (e) {
       error = e.toString();
     }
@@ -133,11 +172,28 @@ class HorarioProvider extends ChangeNotifier {
     }
   }
 
+  /// 👇 NUEVO: carga la lista de actividades desde /activities.
+  /// Se usa para poblar el dropdown de actividad en el formulario y para
+  /// resolver 'actividadNombre' cuando el backend no la manda anidada.
+  Future<void> cargarActividades() async {
+    try {
+      _actividades = await _service.obtenerActividades();
+      if (_horarios.isNotEmpty) {
+        _horarios = _rellenarNombres(_horarios);
+      }
+      notifyListeners();
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+    }
+  }
+
   Future<void> agregarHorario(Horario h) async {
     final creado = await _service.crearHorario(h);
     final nombreReal = _nombrePorEmpleadoId(creado.empleadoId);
+    final actividadReal = _nombrePorActivityId(creado.activityId);
     _horarios.add(
-      nombreReal != null ? creado.copyWith(nombre: nombreReal) : creado,
+      creado.copyWith(nombre: nombreReal, actividadNombre: actividadReal),
     );
     notifyListeners();
   }
@@ -146,7 +202,7 @@ class HorarioProvider extends ChangeNotifier {
     required int empleadoId,
     required String nombre,
     required String turno,
-    required String actividad,
+    required int activityId, // 👈 antes era 'actividad' (String)
     required String fechaInicio,
     required String fechaFin,
     required String horaEntrada,
@@ -157,7 +213,7 @@ class HorarioProvider extends ChangeNotifier {
         empleadoId: empleadoId,
         nombre: nombre,
         turno: turno,
-        actividad: actividad,
+        activityId: activityId,
         entrada: horaEntrada,
         salida: horaSalida,
         fechaInicio: fechaInicio,
@@ -181,7 +237,7 @@ class HorarioProvider extends ChangeNotifier {
     required int empleadoId,
     required String nombre,
     required String turno,
-    required String actividad,
+    required int activityId, // 👈 antes era 'actividad' (String)
     required String fechaInicio,
     required String fechaFin,
     required String horaEntrada,
@@ -193,7 +249,7 @@ class HorarioProvider extends ChangeNotifier {
         empleadoId: empleadoId,
         nombre: nombre,
         turno: turno,
-        actividad: actividad,
+        activityId: activityId,
         entrada: horaEntrada,
         salida: horaSalida,
         fechaInicio: fechaInicio,
@@ -202,12 +258,14 @@ class HorarioProvider extends ChangeNotifier {
 
       final actualizado = await _service.actualizarHorario(id, horarioEditado);
       final nombreReal = _nombrePorEmpleadoId(actualizado.empleadoId);
+      final actividadReal = _nombrePorActivityId(actualizado.activityId);
 
       final index = _horarios.indexWhere((h) => h.id == id);
       if (index != -1) {
-        _horarios[index] = nombreReal != null
-            ? actualizado.copyWith(nombre: nombreReal)
-            : actualizado;
+        _horarios[index] = actualizado.copyWith(
+          nombre: nombreReal,
+          actividadNombre: actividadReal,
+        );
       }
       notifyListeners();
       return true;

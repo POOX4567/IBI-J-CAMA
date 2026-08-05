@@ -8,15 +8,6 @@ import 'package:fluttertoast/fluttertoast.dart'; // FLUTTERTOAST
 import 'horario.dart';
 import 'horario_provider.dart';
 
-/// Modal (Dialog) para CREAR o EDITAR un horario.
-/// Si [horario] es null -> modo creación (todos los campos vacíos).
-/// Si [horario] viene con datos -> modo edición (todos los campos
-/// precargados y editables, incluyendo empleado, turno, actividad,
-/// fechas y horas).
-///
-/// Úsalo con el helper estático `HorarioFormScreen.show(...)`, que ya
-/// se encarga de mostrarlo centrado sobre el resto de la pantalla
-/// (con el fondo oscurecido) usando showDialog.
 class HorarioFormScreen extends StatefulWidget {
   final Horario? horario;
 
@@ -24,9 +15,6 @@ class HorarioFormScreen extends StatefulWidget {
 
   bool get esEdicion => horario != null;
 
-  /// Muestra el formulario como modal centrado.
-  /// Devuelve `true` si se guardó algo (para que la pantalla que llama
-  /// pueda refrescar), o `null`/`false` si se canceló.
   static Future<bool?> show(
     BuildContext context, {
     Horario? horario,
@@ -48,48 +36,60 @@ class HorarioFormScreen extends StatefulWidget {
 
 class _HorarioFormScreenState extends State<HorarioFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _actividadCtrl;
 
   int? _empleadoId;
   String? _empleadoNombre;
   String? _turno;
+
+  // 👇 CAMBIO: ya no hay un TextEditingController de actividad, ahora es
+  // un id que se selecciona de un dropdown (tabla 'activities').
+  int? _activityId;
+
   DateTime? _fechaInicio;
   DateTime? _fechaFin;
   TimeOfDay? _horaEntrada;
   TimeOfDay? _horaSalida;
   bool _guardando = false;
 
-  // ── NUEVO: estado propio para saber si la carga de empleados falló ──────
+  // ── estado propio para saber si la carga de empleados falló ──────
   bool _cargandoEmpleados = false;
   String? _errorEmpleados;
 
-  final _turnos = const ['Matutino', 'Vespertino', 'Nocturno'];
+  // ── NUEVO: estado propio para saber si la carga de actividades falló ──
+  bool _cargandoActividades = false;
+  String? _errorActividades;
+
+  final _turnos = const ['Matutino', 'Vespertino'];
 
   @override
   void initState() {
     super.initState();
 
     final h = widget.horario;
-    _actividadCtrl = TextEditingController(text: h?.actividad ?? '');
 
     if (h != null) {
       // ── Precarga de TODOS los campos en modo edición ──────────────────
       _empleadoId = h.empleadoId;
       _empleadoNombre = h.nombre;
       _turno = h.turno;
+      _activityId = h.activityId == 0 ? null : h.activityId;
       _fechaInicio = _parsearFecha(h.fechaInicio);
       _fechaFin = _parsearFecha(h.fechaFin);
       _horaEntrada = _parsearHora(h.entrada);
       _horaSalida = _parsearHora(h.salida);
     }
 
-    // Asegura que el dropdown de empleados tenga datos frescos
+    // Asegura que los dropdowns de empleados y actividades tengan datos
+    // frescos.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _cargarEmpleados();
+      if (mounted) {
+        _cargarEmpleados();
+        _cargarActividades();
+      }
     });
   }
 
-  // ── NUEVO: carga los empleados y captura/expone cualquier error ────────
+  // ── carga los empleados y captura/expone cualquier error ────────
   Future<void> _cargarEmpleados() async {
     setState(() {
       _cargandoEmpleados = true;
@@ -112,6 +112,31 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
     }
     if (mounted) {
       setState(() => _cargandoEmpleados = false);
+    }
+  }
+
+  // ── NUEVO: carga las actividades (tabla 'activities') y captura/expone
+  // cualquier error, igual que se hace con empleados. ──────────────────
+  Future<void> _cargarActividades() async {
+    setState(() {
+      _cargandoActividades = true;
+      _errorActividades = null;
+    });
+    try {
+      final provider = context.read<HorarioProvider>();
+      await provider.cargarActividades();
+      if (provider.error != null && provider.actividades.isEmpty) {
+        _errorActividades = provider.error;
+      } else if (provider.actividades.isEmpty) {
+        _errorActividades =
+            'El servidor respondió correctamente pero no devolvió ninguna '
+            'actividad. Verifica el endpoint "/activities" en el backend.';
+      }
+    } catch (e) {
+      _errorActividades = 'No se pudo conectar con el servidor: $e';
+    }
+    if (mounted) {
+      setState(() => _cargandoActividades = false);
     }
   }
 
@@ -193,6 +218,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
 
     if (_empleadoId == null ||
         _turno == null ||
+        _activityId == null ||
         _fechaInicio == null ||
         _fechaFin == null ||
         _horaEntrada == null ||
@@ -224,7 +250,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         empleadoId: _empleadoId!,
         nombre: _empleadoNombre ?? '',
         turno: _turno!,
-        actividad: _actividadCtrl.text.trim(),
+        activityId: _activityId!,
         fechaInicio: DateFormat('yyyy-MM-dd').format(_fechaInicio!),
         fechaFin: DateFormat('yyyy-MM-dd').format(_fechaFin!),
         horaEntrada: _horaParaApi(_horaEntrada!),
@@ -236,7 +262,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         empleadoId: _empleadoId!,
         nombre: _empleadoNombre ?? '',
         turno: _turno!,
-        actividad: _actividadCtrl.text.trim(),
+        activityId: _activityId!,
         fechaInicio: DateFormat('yyyy-MM-dd').format(_fechaInicio!),
         fechaFin: DateFormat('yyyy-MM-dd').format(_fechaFin!),
         horaEntrada: _horaParaApi(_horaEntrada!),
@@ -265,12 +291,6 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         textColor: Colors.white,
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _actividadCtrl.dispose();
-    super.dispose();
   }
 
   @override
@@ -332,7 +352,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── NUEVO: aviso visible si falló la carga de
+                      // ── aviso visible si falló la carga de
                       // empleados, en vez de quedar en silencio ──────────
                       if (_cargandoEmpleados)
                         const Padding(
@@ -385,6 +405,67 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: _cargarEmpleados,
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Reintentar'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // ── NUEVO: aviso visible si falló la carga de
+                      // actividades ──────────────────────────────────────
+                      if (_cargandoActividades)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 14),
+                          child: LinearProgressIndicator(
+                            color: Color(0xff1B5E20),
+                          ),
+                        ),
+                      if (!_cargandoActividades && _errorActividades != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffFDECEA),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'No se pudieron cargar las actividades',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _errorActividades!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _cargarActividades,
                                   icon: const Icon(Icons.refresh, size: 16),
                                   label: const Text('Reintentar'),
                                 ),
@@ -447,9 +528,12 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Actividad
-                      TextFormField(
-                        controller: _actividadCtrl,
+                      // ── CAMBIO: Actividad ahora es un dropdown que
+                      // consume la tabla 'activities' (antes era un
+                      // TextFormField libre) ───────────────────────────
+                      DropdownButtonFormField<int>(
+                        value: _activityId,
+                        isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Actividad',
                           prefixIcon: const Icon(Icons.task_alt),
@@ -457,9 +541,16 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Requerido'
-                            : null,
+                        items: provider.actividades.map((a) {
+                          final id = _idComoInt(a['id']);
+                          return DropdownMenuItem<int>(
+                            value: id,
+                            child: Text(a['name'] ?? 'Sin nombre'),
+                          );
+                        }).toList(),
+                        onChanged: (v) => setState(() => _activityId = v),
+                        validator: (v) =>
+                            v == null ? 'Selecciona una actividad' : null,
                       ),
                       const SizedBox(height: 14),
 

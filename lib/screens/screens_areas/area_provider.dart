@@ -145,19 +145,28 @@ class AreaProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // ── GET /areas ────────────────────────────────────────────────────
+  /// Filtra una lista de áreas dejando SOLO las que pertenecen a algún
+  /// empleado del catálogo `empleados` (ya filtrado por id_usuario). Esto
+  /// protege la UI aunque el backend no filtre bien `/areas` por su cuenta.
+  List<Area> _filtrarPorMisEmpleados(List<Area> lista) {
+    if (empleados.isEmpty) return lista;
+    final idsPermitidos = empleados.map((e) => '${e['id']}').toSet();
+    return lista
+        .where((a) => idsPermitidos.contains('${a.empleadoId}'))
+        .toList();
+  }
+
   Future<void> cargarAreas() async {
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      // Nos aseguramos de tener los catálogos (empleados/áreas/cultivos)
-      // ANTES de rellenar nombres, si aún no se han cargado.
       if (!datosFormularioCargados && !cargandoDatosFormulario) {
         await cargarDatosDeFormulario();
       }
       final lista = await _service.obtenerAreas();
-      _areas = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _areas = _filtrarPorMisEmpleados(conNombres); // ← NUEVO
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
@@ -207,13 +216,15 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
-  // ── GET /areas/historial ───────────────────────────────────────────
   Future<void> cargarHistorial() async {
     isLoading = true;
     notifyListeners();
     try {
       final lista = await _service.obtenerHistorial();
-      _historial = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _historial = _filtrarPorMisEmpleados(
+        conNombres,
+      ); // ← confirma que esto esté
     } catch (e) {
       error = e.toString();
       _log('cargarHistorial', e);

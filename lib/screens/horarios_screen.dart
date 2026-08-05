@@ -320,7 +320,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: DashboardStatCard(
-                valor: '$totalRegistros',
+                valor: '${provider.empleados.length}',
                 titulo: 'Empleados',
                 icono: Icons.people,
                 color: const Color(0xff1565C0),
@@ -437,7 +437,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
                           ),
                         ),
                         Text(
-                          '$totalRegistros asignaciones vigentes',
+                          '${provider.empleados.length} asignaciones vigentes',
                           style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 13,

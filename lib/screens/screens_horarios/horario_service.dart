@@ -1,7 +1,13 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 NUEVO
+
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'horario.dart';
 
 class HorarioService {
@@ -19,7 +25,7 @@ class HorarioService {
       FlutterSecureStorage(); // 👈 NUEVO
 
   // Headers comunes: 'Accept' es CLAVE para que Laravel siempre
-  // regrese JSON en vez de una página HTML de error/login.
+  // regrese JSON en vez de una página HTML de erroar/login.
   // 👇 Ahora es un método async que agrega el token guardado por AuthService.
   Future<Map<String, String>> _headers() async {
     final token = await _storage.read(key: 'token');
@@ -61,12 +67,24 @@ class HorarioService {
   // ---------------------------------------------------------------------
 
   Future<List<Horario>> obtenerHorarios() async {
-    final uri = Uri.parse('$baseUrl/horarios');
-    debugPrint('GET $uri');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/horarios',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
+    if (kDebugMode) {
+      debugPrint('GET $uri');
+    }
+
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-    debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+
+    if (kDebugMode) {
+      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+    }
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
       return data.map((e) => Horario.fromJson(e)).toList();
@@ -91,11 +109,17 @@ class HorarioService {
 
   Future<List<Horario>> horariosPorTurno(String turno) async {
     final uri = Uri.parse('$baseUrl/horarios/turno/$turno');
-    debugPrint('GET $uri');
+    if (kDebugMode) {
+      debugPrint('GET $uri');
+    }
+
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-    debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+
+    if (kDebugMode) {
+      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+    }
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
       return data.map((e) => Horario.fromJson(e)).toList();
@@ -110,11 +134,17 @@ class HorarioService {
 
   Future<Map<String, int>> obtenerEstadisticas() async {
     final uri = Uri.parse('$baseUrl/horarios/estadisticas');
-    debugPrint('GET $uri');
+    if (kDebugMode) {
+      debugPrint('GET $uri');
+    }
+
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-    debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+
+    if (kDebugMode) {
+      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+    }
     if (res.statusCode == 200) {
       final data = _extraerMapa(res.body);
       return {
@@ -170,12 +200,27 @@ class HorarioService {
   }
 
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
-    final uri = Uri.parse('$baseUrl/employees');
-    debugPrint('GET $uri');
+    // Obtenemos el id del usuario logueado (guardado en el Login)
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    // Lo mandamos como query param dinámico, NO fijo
+    final uri = Uri.parse(
+      '$baseUrl/employees',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
+    if (kDebugMode) {
+      debugPrint('GET $uri');
+    }
+
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-    debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+
+    if (kDebugMode) {
+      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+    }
+
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
       return data
@@ -190,6 +235,55 @@ class HorarioService {
     }
     throw Exception(
       'Error al obtener empleados (${res.statusCode}): ${res.body}',
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // ACTIVIDADES (tabla 'activities', usada como relación en horarios
+  // vía 'activity_id')
+  // ---------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> obtenerActividades() async {
+    final uri = Uri.parse('$baseUrl/activities');
+
+    if (kDebugMode) {
+      debugPrint('GET $uri');
+    }
+
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
+
+    if (kDebugMode) {
+      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
+    }
+
+    if (res.statusCode == 200) {
+      final data = _extraerLista(res.body);
+      return data
+          .map<Map<String, dynamic>>(
+            (e) => {
+              'id': e['id'],
+              'name': e['name'] ?? e['nombre'] ?? 'Sin nombre',
+            },
+          )
+          .toList();
+    }
+    throw Exception(
+      'Error al obtener actividades (${res.statusCode}): ${res.body}',
+    );
+  }
+
+  Future<Map<String, dynamic>> obtenerActividadPorId(int id) async {
+    final uri = Uri.parse('$baseUrl/activities/$id');
+    final res = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
+    if (res.statusCode == 200) {
+      return _extraerMapa(res.body);
+    }
+    throw Exception(
+      'Error al obtener actividad (${res.statusCode}): ${res.body}',
     );
   }
 

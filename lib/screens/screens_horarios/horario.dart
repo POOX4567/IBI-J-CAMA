@@ -6,7 +6,13 @@ class Horario {
   final int empleadoId;
   final String nombre;
   final String turno;
-  final String actividad;
+
+  // 👇 CAMBIO: 'actividad' (texto libre) fue reemplazado por la relación
+  // con la tabla 'activities'. Guardamos el id (obligatorio para
+  // crear/editar) y el nombre resuelto (solo para mostrar en pantalla).
+  final int activityId;
+  final String actividadNombre;
+
   final String entrada;
   final String salida;
   final String fechaInicio;
@@ -17,7 +23,8 @@ class Horario {
     required this.empleadoId,
     required this.nombre,
     required this.turno,
-    required this.actividad,
+    required this.activityId,
+    this.actividadNombre = '',
     required this.entrada,
     required this.salida,
     required this.fechaInicio,
@@ -45,10 +52,17 @@ class Horario {
     }
   }
 
+  static int _idComoInt(dynamic id) {
+    if (id == null) return 0;
+    if (id is int) return id;
+    return int.tryParse('$id') ?? 0;
+  }
+
   /// Convierte la respuesta JSON del backend Laravel a un Horario
   factory Horario.fromJson(Map<String, dynamic> json) {
-    //  el nombre puede venir anidado en 'empleado' con la llave 'name'
-    // o 'nombre' según el endpoint; probamos ambas antes de rendirnos.
+    //  el nombre del empleado puede venir anidado en 'empleado' con la
+    // llave 'name' o 'nombre' según el endpoint; probamos ambas antes de
+    // rendirnos.
     String nombreResuelto = 'Sin nombre';
     final empleado = json['empleado'];
     if (empleado is Map<String, dynamic>) {
@@ -59,6 +73,21 @@ class Horario {
       nombreResuelto = json['nombre'];
     }
 
+    // 👇 NUEVO: la actividad ahora viene como relación. El backend puede
+    // mandarla anidada como 'activity' (objeto con id/name), o como
+    // 'activity_id' + 'actividad_nombre' sueltos. Probamos todas las
+    // variantes razonables.
+    int activityId = 0;
+    String actividadNombre = '';
+    final activity = json['activity'];
+    if (activity is Map<String, dynamic>) {
+      activityId = _idComoInt(activity['id']);
+      actividadNombre = activity['name'] ?? activity['nombre'] ?? '';
+    } else {
+      activityId = _idComoInt(json['activity_id']);
+      actividadNombre = json['actividad_nombre'] ?? json['activity_name'] ?? '';
+    }
+
     return Horario(
       id: json['id'],
       empleadoId: json['empleado_id'] is int
@@ -66,7 +95,8 @@ class Horario {
           : int.tryParse('${json['empleado_id']}') ?? 0,
       nombre: nombreResuelto,
       turno: json['turno'] ?? '',
-      actividad: json['actividad'] ?? '',
+      activityId: activityId,
+      actividadNombre: actividadNombre,
       entrada: (json['hora_entrada'] ?? '').toString().length >= 5
           ? (json['hora_entrada'] ?? '').toString().substring(0, 5)
           : '',
@@ -83,7 +113,7 @@ class Horario {
     return {
       'empleado_id': empleadoId,
       'turno': turno,
-      'actividad': actividad,
+      'activity_id': activityId, // 👈 antes era 'actividad': actividad
       'fecha_inicio': fechaInicio,
       'fecha_fin': fechaFin,
       'hora_entrada': entrada,
@@ -100,7 +130,8 @@ class Horario {
     int? empleadoId,
     String? nombre,
     String? turno,
-    String? actividad,
+    int? activityId,
+    String? actividadNombre,
     String? entrada,
     String? salida,
     String? fechaInicio,
@@ -111,7 +142,8 @@ class Horario {
       empleadoId: empleadoId ?? this.empleadoId,
       nombre: nombre ?? this.nombre,
       turno: turno ?? this.turno,
-      actividad: actividad ?? this.actividad,
+      activityId: activityId ?? this.activityId,
+      actividadNombre: actividadNombre ?? this.actividadNombre,
       entrada: entrada ?? this.entrada,
       salida: salida ?? this.salida,
       fechaInicio: fechaInicio ?? this.fechaInicio,

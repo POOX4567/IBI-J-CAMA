@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 NUEVO
+import 'package:shared_preferences/shared_preferences.dart'; // ← AGREGAR arriba
 
 import 'area.dart';
 
@@ -67,7 +68,13 @@ class AreaService {
 
   /// GET /areas
   Future<List<Area>> obtenerAreas() async {
-    final uri = Uri.parse('$baseUrl/areas');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/areas',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -95,7 +102,13 @@ class AreaService {
 
   /// GET /areas/historial
   Future<List<Area>> obtenerHistorial() async {
-    final uri = Uri.parse('$baseUrl/areas/historial');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/historial',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -112,7 +125,13 @@ class AreaService {
 
   /// GET /areas/resumen-dia
   Future<Map<String, dynamic>> obtenerResumenDia() async {
-    final uri = Uri.parse('$baseUrl/areas/resumen-dia');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/resumen-dia',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -128,7 +147,13 @@ class AreaService {
 
   /// GET /areas/productividad-semanal
   Future<List<Map<String, dynamic>>> obtenerProductividadSemanal() async {
-    final uri = Uri.parse('$baseUrl/areas/productividad-semanal');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/productividad-semanal',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -227,7 +252,13 @@ class AreaService {
 
   /// GET /employees (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
-    final uri = Uri.parse('$baseUrl/employees');
+    final prefs = await SharedPreferences.getInstance();
+    final int idUsuario = prefs.getInt('id') ?? 0;
+
+    final uri = Uri.parse(
+      '$baseUrl/employees',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
