@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ibi/services/maintenance_service.dart';
+import 'package:ibi/models/employee_model.dart';
 
 import '../../widgets/maintenance_requests_widgets/maintenance_header.dart';
 import '../../widgets/maintenance_requests_widgets/maintenance_card.dart';
@@ -30,6 +31,7 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
 
   final MaintenanceService _service = MaintenanceService();
   List<MaintenanceRequest> _requests = [];
+  List<Employee> _empleados = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -48,6 +50,7 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
 
     try {
       final modelos = await _service.fetchMaintenanceTasks();
+      _empleados = await _service.fetchEmployees();
       setState(() {
         _requests = modelos
             .map((m) => MaintenanceRequest.fromMaintenanceModel(m))
@@ -190,6 +193,9 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
                           onRemoveImage: () =>
                               setState(() => _requestImages.remove(req.id)),
                           onStateUpdated: () => setState(() {}),
+                          service: _service,
+                          onRefresh: _cargarSolicitudes,
+                          empleados: _empleados,
                           onEditRequested: () {
                             showModalBottomSheet(
                               context: context,

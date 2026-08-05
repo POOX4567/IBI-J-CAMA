@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
+import 'package:ibi/services/maintenance_service.dart';
+import 'package:ibi/models/employee_model.dart';
 import '../../utils/maintenance_helpers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +17,9 @@ class MaintenanceCard extends StatelessWidget {
   final VoidCallback onRemoveImage;
   final VoidCallback onStateUpdated;
   final VoidCallback? onEditRequested;
+  final MaintenanceService service;
+  final VoidCallback onRefresh;
+  final List<Employee> empleados;
 
   const MaintenanceCard({
     Key? key,
@@ -26,6 +31,9 @@ class MaintenanceCard extends StatelessWidget {
     required this.onRemoveImage,
     required this.onStateUpdated,
     this.onEditRequested,
+    required this.service,
+    required this.onRefresh,
+    required this.empleados,
   }) : super(key: key);
 
   @override
@@ -352,12 +360,12 @@ class MaintenanceCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _mostrarOpcionesDePrioridad(context),
-                icon: const Icon(LucideIcons.alertTriangle, size: 16),
-                label: const Text("Tipo"),
+                onPressed: () => _confirmarEliminar(context),
+                icon: const Icon(LucideIcons.trash2, size: 16, color: Colors.red),
+                label: const Text("Eliminar", style: TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF5D4037),
-                  side: BorderSide(color: Colors.grey[300]!),
+                  foregroundColor: Colors.red,
+                  side: BorderSide(color: Colors.red[200]!),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -384,24 +392,24 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.clock, color: Colors.orange[600]),
               title: const Text("Marcar como Pendiente"),
               onTap: () {
-                request.status = "Pendiente";
-                _cerrarYActualizar(ctx, 'Estado actualizado');
+                Navigator.pop(ctx);
+                _actualizarEstado('Pendiente', 'Estado actualizado', context);
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.alertCircle, color: Colors.blue[600]),
               title: const Text("Marcar en Progreso"),
               onTap: () {
-                request.status = "En proceso";
-                _cerrarYActualizar(ctx, 'Estado actualizado');
+                Navigator.pop(ctx);
+                _actualizarEstado('En proceso', 'Estado actualizado', context);
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.checkCircle, color: Colors.green[600]),
               title: const Text("Cerrar Solicitud (Resuelto)"),
               onTap: () {
-                request.status = "Resuelto";
-                _cerrarYActualizar(ctx, 'Solicitud completada');
+                Navigator.pop(ctx);
+                _actualizarEstado('Resuelto', 'Solicitud completada', context);
               },
             ),
           ],
@@ -410,48 +418,79 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  void _mostrarOpcionesDePrioridad(BuildContext context) {
-    showModalBottomSheet(
+  void _confirmarEliminar(BuildContext context) {
+    showDialog(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
-              title: const Text("Correctivo"),
-              onTap: () {
-                request.priority = "Correctivo";
-                _cerrarYActualizar(ctx, 'Tipo actualizado');
-              },
-            ),
-            ListTile(
-              leading: Icon(LucideIcons.arrowDownCircle, color: Colors.green[600]),
-              title: const Text("Preventivo"),
-              onTap: () {
-                request.priority = "Preventivo";
-                _cerrarYActualizar(ctx, 'Tipo actualizado');
-              },
-            ),
-          ],
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar solicitud'),
+        content: const Text('¿Estás seguro de eliminar esta solicitud? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _eliminarSolicitud(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }
 
-  void _cerrarYActualizar(BuildContext context, String mensaje) {
-    Navigator.pop(context);
-    onStateUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  Future<void> _eliminarSolicitud(BuildContext context) async {
+    try {
+      await service.deleteMaintenance(int.parse(request.id));
+      onRefresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Solicitud eliminada correctamente'),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red[800],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _actualizarEstado(String nuevoEstado, String mensaje, BuildContext context) async {
+    try {
+      await service.updateMaintenance(
+        id: int.parse(request.id),
+        titulo: request.title,
+        descripcion: request.description,
+        tipo: request.priority,
+        estado: nuevoEstado,
+      );
+      request.status = nuevoEstado;
+      onRefresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red[800],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   // ==========================================
@@ -460,7 +499,14 @@ class MaintenanceCard extends StatelessWidget {
 
   void _mostrarOpcionesDeContacto(BuildContext context) {
     final persona = request.assignedTo ?? request.reportedBy;
-    const numeroTelefono = "9991234567";
+    Employee? empleado;
+    if (request.assignedTo != null) {
+      try {
+        empleado = empleados.firstWhere((e) => e.nombre == request.assignedTo);
+      } catch (_) {}
+    }
+    final numeroTelefono = empleado?.telephone;
+    final tieneTelefono = numeroTelefono != null && numeroTelefono.isNotEmpty;
 
     showModalBottomSheet(
       context: context,
@@ -490,15 +536,22 @@ class MaintenanceCard extends StatelessWidget {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.phoneCall, color: Colors.green),
-              title: const Text("Llamar por teléfono"),
-              subtitle: const Text(numeroTelefono),
-              onTap: () {
-                Navigator.pop(ctx);
-                _hacerLlamada(numeroTelefono, context);
-              },
-            ),
+            if (tieneTelefono)
+              ListTile(
+                leading: const Icon(LucideIcons.phoneCall, color: Colors.green),
+                title: const Text("Llamar por teléfono"),
+                subtitle: Text(numeroTelefono!),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _hacerLlamada(numeroTelefono, context);
+                },
+              )
+            else
+              ListTile(
+                leading: const Icon(LucideIcons.phoneOff, color: Colors.grey),
+                title: const Text("Sin teléfono registrado"),
+                subtitle: const Text("Este empleado no tiene número de contacto"),
+              ),
           ],
         ),
       ),
