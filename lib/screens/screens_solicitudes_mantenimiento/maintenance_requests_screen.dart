@@ -190,6 +190,8 @@ class _MaintenanceRequestsScreenState extends State<MaintenanceRequestsScreen> {
                           onRemoveImage: () =>
                               setState(() => _requestImages.remove(req.id)),
                           onStateUpdated: () => setState(() {}),
+                          service: _service,
+                          onRefresh: _cargarSolicitudes,
                           onEditRequested: () {
                             showModalBottomSheet(
                               context: context,

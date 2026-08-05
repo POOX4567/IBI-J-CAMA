@@ -58,7 +58,8 @@ class MaintenanceService {
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final decoded = jsonDecode(response.body);
-      return MaintenanceModel.fromJson(decoded);
+      final data = decoded['data'] ?? decoded;
+      return MaintenanceModel.fromJson(data);
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
@@ -98,7 +99,8 @@ class MaintenanceService {
     required int id,
     required String titulo,
     required String descripcion,
-    required int invernaderoId,
+    required String tipo,
+    String? estado,
   }) async {
     final token = await _getToken();
     final response = await http.put(
@@ -111,13 +113,15 @@ class MaintenanceService {
       body: jsonEncode({
         'titulo': titulo,
         'descripcion': descripcion,
-        'invernadero_id': invernaderoId,
+        'tipo': tipo,
+        if (estado != null) 'estado': estado,
       }),
     );
 
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
-      return MaintenanceModel.fromJson(decoded);
+      final data = decoded['data'] ?? decoded;
+      return MaintenanceModel.fromJson(data);
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',

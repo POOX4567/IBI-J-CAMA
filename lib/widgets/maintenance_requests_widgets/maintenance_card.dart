@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ibi/data/mock_data.dart';
+import 'package:ibi/services/maintenance_service.dart';
 import '../../utils/maintenance_helpers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +16,8 @@ class MaintenanceCard extends StatelessWidget {
   final VoidCallback onRemoveImage;
   final VoidCallback onStateUpdated;
   final VoidCallback? onEditRequested;
+  final MaintenanceService service;
+  final VoidCallback onRefresh;
 
   const MaintenanceCard({
     Key? key,
@@ -26,6 +29,8 @@ class MaintenanceCard extends StatelessWidget {
     required this.onRemoveImage,
     required this.onStateUpdated,
     this.onEditRequested,
+    required this.service,
+    required this.onRefresh,
   }) : super(key: key);
 
   @override
@@ -384,24 +389,24 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.clock, color: Colors.orange[600]),
               title: const Text("Marcar como Pendiente"),
               onTap: () {
-                request.status = "Pendiente";
-                _cerrarYActualizar(ctx, 'Estado actualizado');
+                Navigator.pop(ctx);
+                _actualizarEstado('Pendiente', 'Estado actualizado', context);
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.alertCircle, color: Colors.blue[600]),
               title: const Text("Marcar en Progreso"),
               onTap: () {
-                request.status = "En proceso";
-                _cerrarYActualizar(ctx, 'Estado actualizado');
+                Navigator.pop(ctx);
+                _actualizarEstado('En proceso', 'Estado actualizado', context);
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.checkCircle, color: Colors.green[600]),
               title: const Text("Cerrar Solicitud (Resuelto)"),
               onTap: () {
-                request.status = "Resuelto";
-                _cerrarYActualizar(ctx, 'Solicitud completada');
+                Navigator.pop(ctx);
+                _actualizarEstado('Resuelto', 'Solicitud completada', context);
               },
             ),
           ],
@@ -424,16 +429,16 @@ class MaintenanceCard extends StatelessWidget {
               leading: Icon(LucideIcons.arrowUpCircle, color: Colors.red[600]),
               title: const Text("Correctivo"),
               onTap: () {
-                request.priority = "Correctivo";
-                _cerrarYActualizar(ctx, 'Tipo actualizado');
+                Navigator.pop(ctx);
+                _actualizarTipo('Correctivo', 'Tipo actualizado', context);
               },
             ),
             ListTile(
               leading: Icon(LucideIcons.arrowDownCircle, color: Colors.green[600]),
               title: const Text("Preventivo"),
               onTap: () {
-                request.priority = "Preventivo";
-                _cerrarYActualizar(ctx, 'Tipo actualizado');
+                Navigator.pop(ctx);
+                _actualizarTipo('Preventivo', 'Tipo actualizado', context);
               },
             ),
           ],
@@ -442,16 +447,61 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 
-  void _cerrarYActualizar(BuildContext context, String mensaje) {
-    Navigator.pop(context);
-    onStateUpdated();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  Future<void> _actualizarEstado(String nuevoEstado, String mensaje, BuildContext context) async {
+    try {
+      await service.updateMaintenance(
+        id: int.parse(request.id),
+        titulo: request.title,
+        descripcion: request.description,
+        tipo: request.priority,
+        estado: nuevoEstado,
+      );
+      request.status = nuevoEstado;
+      onRefresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red[800],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _actualizarTipo(String nuevoTipo, String mensaje, BuildContext context) async {
+    try {
+      await service.updateMaintenance(
+        id: int.parse(request.id),
+        titulo: request.title,
+        descripcion: request.description,
+        tipo: nuevoTipo,
+      );
+      request.priority = nuevoTipo;
+      onRefresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red[800],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   // ==========================================
