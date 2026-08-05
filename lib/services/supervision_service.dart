@@ -26,8 +26,13 @@ class SupervisionService {
       },
     );
     if (response.statusCode == 200) {
-      List<dynamic> body = jsonDecode(response.body);
-      return body.map((json) => SensorIot.fromJson(json)).toList();
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        List<dynamic> data = decoded['data'];
+        return data.map((json) => SensorIot.fromJson(json)).toList();
+      } else {
+        throw Exception(decoded['message'] ?? 'Fallo al cargar los sensores');
+      }
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
@@ -46,8 +51,13 @@ class SupervisionService {
       },
     );
     if (response.statusCode == 200) {
-      List<dynamic> body = jsonDecode(response.body);
-      return body.map((json) => ElementoEstado.fromJson(json)).toList();
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        List<dynamic> data = decoded['data'];
+        return data.map((json) => ElementoEstado.fromJson(json)).toList();
+      } else {
+        throw Exception(decoded['message'] ?? 'Fallo al cargar los elementos');
+      }
     } else {
       throw Exception(
         'Error ${response.statusCode}: ${response.reasonPhrase} - ${response.body}',
@@ -67,7 +77,7 @@ class SupervisionService {
     );
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
-      if (decoded['status'] == 'success') {
+      if (decoded['success'] == true) {
         List<dynamic> data = decoded['data'];
         return data.map((json) => LecturaSensor.fromJson(json)).toList();
       } else {

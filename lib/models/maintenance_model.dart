@@ -7,6 +7,7 @@ class MaintenanceModel {
   final String tipo;
   final String estado;
   final String invernadero;
+  final String? agricultor;
   final String? imagen;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -18,6 +19,7 @@ class MaintenanceModel {
     required this.tipo,
     required this.estado,
     required this.invernadero,
+    this.agricultor,
     this.imagen,
     this.createdAt,
     this.updatedAt,
@@ -31,6 +33,7 @@ class MaintenanceModel {
       tipo: json['tipo'].toString(),
       estado: json['estado'].toString(),
       invernadero: json['invernadero'].toString(),
+      agricultor: json['agricultor']?.toString(),
       imagen: json['imagen']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'].toString())
