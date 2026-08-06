@@ -275,11 +275,16 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw employee[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'parent_id':
+                  e['parent_id'], // 👈 lo guardamos igual, por si acaso
             },
           )
           .toList();
@@ -304,11 +309,15 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw invernadero[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'user_id': e['user_id'],
             },
           )
           .toList();
@@ -319,12 +328,6 @@ class AreaService {
   }
 
   /// GET /cultivos (para el dropdown de "Nueva Área")
-  /// 👇 CORREGIDO: le agrego 'id_usuario' igual que a /employees e
-  /// /invernaderos, para que solo devuelva los cultivos que te
-  /// pertenecen. IMPORTANTE: esto solo funciona si el controlador
-  /// Laravel de /cultivos realmente FILTRA por ese query param — si el
-  /// backend lo ignora, seguirá devolviendo todos los cultivos sin
-  /// importar qué mande el Flutter. Revisa el CultivoController.
   Future<List<Map<String, dynamic>>> obtenerCultivos() async {
     final idUsuario = await _idUsuarioActual();
     final uri = Uri.parse(
@@ -338,13 +341,15 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw cultivo[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
-              'user_id':
-                  e['user_id'], // 👈 NUEVO: lo guardamos para filtrar después
+              'user_id': e['user_id'],
             },
           )
           .toList();

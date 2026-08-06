@@ -242,21 +242,15 @@ class HorarioService {
   // ACTIVIDADES (tabla 'activities', usada como relación en horarios
   // vía 'activity_id')
   // ---------------------------------------------------------------------
-
+  // Corrige obtenerActividades(): el campo real es 'activity', no 'name'
   Future<List<Map<String, dynamic>>> obtenerActividades() async {
     final uri = Uri.parse('$baseUrl/activities');
 
-    if (kDebugMode) {
-      debugPrint('GET $uri');
-    }
-
+    if (kDebugMode) debugPrint('GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-
-    if (kDebugMode) {
-      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
-    }
+    if (kDebugMode) debugPrint('Respuesta (${res.statusCode}): ${res.body}');
 
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -264,7 +258,9 @@ class HorarioService {
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
-              'name': e['name'] ?? e['nombre'] ?? 'Sin nombre',
+              'name': e['activity'] ?? e['name'] ?? 'Sin nombre',
+              'description': e['description'] ?? '',
+              'date': e['date'] ?? '',
             },
           )
           .toList();
@@ -274,19 +270,38 @@ class HorarioService {
     );
   }
 
-  Future<Map<String, dynamic>> obtenerActividadPorId(int id) async {
-    final uri = Uri.parse('$baseUrl/activities/$id');
+  // ✅ PÉGALO en su lugar (esto sí pertenece al servicio):
+  Future<Map<String, dynamic>> crearActividad({
+    required String actividad,
+    required int empleadoId, // 👈 el empleado, no el jefe
+    String descripcion = '',
+    DateTime? fecha,
+  }) async {
+    final f = fecha ?? DateTime.now();
+    final fechaFormateada =
+        '${f.year.toString().padLeft(4, '0')}-'
+        '${f.month.toString().padLeft(2, '0')}-'
+        '${f.day.toString().padLeft(2, '0')}';
+
     final res = await http
-        .get(uri, headers: await _headers())
+        .post(
+          Uri.parse('$baseUrl/activities'),
+          headers: await _headers(),
+          body: jsonEncode({
+            'user_id': empleadoId,
+            'activity': actividad,
+            'description': descripcion,
+            'date': fechaFormateada,
+          }),
+        )
         .timeout(_timeout);
-    if (res.statusCode == 200) {
+    if (res.statusCode == 201 || res.statusCode == 200) {
       return _extraerMapa(res.body);
     }
     throw Exception(
-      'Error al obtener actividad (${res.statusCode}): ${res.body}',
+      'Error al crear actividad (${res.statusCode}): ${res.body}',
     );
   }
-
   // ---------------------------------------------------------------------
   // ÁREAS
   // 👇 ADVERTENCIA: esta sección duplica funcionalidad que YA vive en

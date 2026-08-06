@@ -163,14 +163,32 @@ class HorarioProvider extends ChangeNotifier {
   }
 
   // horario_provider.dart
+  /// 👇 ACTUALIZADO: ahora filtra por parent_id contra el id del jefe
+  /// logueado, como respaldo por si /employees no filtra bien en el
+  /// backend. Si un empleado NO trae parent_id (viene null), se deja
+  /// pasar (todavía no sabemos si el backend siempre lo manda). Los
+  /// prints te dejan ver exactamente qué se descartó y por qué.
   Future<void> cargarEmpleados() async {
     try {
-      final idUsuario =
-          await _idUsuarioActualParaFiltro(); // mismo helper que en AreaProvider
+      final idUsuario = await _idUsuarioActualParaFiltro();
       final data = await _service.obtenerEmpleados();
-      _empleados = data
-          .where((e) => '${e['parent_id']}' == '$idUsuario')
-          .toList();
+
+      _empleados = data.where((e) {
+        final pid = e['parent_id'];
+        final coincide = pid == null || '$pid' == '$idUsuario';
+        if (!coincide) {
+          debugPrint(
+            '🚫 [HorarioProvider] excluido empleado id=${e['id']} '
+            'parent_id=$pid (jefe logueado=$idUsuario)',
+          );
+        }
+        return coincide;
+      }).toList();
+
+      debugPrint(
+        '✅ [HorarioProvider] empleados tras filtro parent_id: '
+        '${_empleados.length}/${data.length} (jefe=$idUsuario)',
+      );
 
       if (_horarios.isNotEmpty) {
         _horarios = _rellenarNombres(_horarios);
@@ -179,6 +197,41 @@ class HorarioProvider extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
       notifyListeners();
+    }
+  }
+
+  /// Crea una nueva actividad en el backend y la agrega a la lista local
+  /// sin necesidad de recargar todo desde /activities.
+  /// 👇 ACTUALIZADO: ahora requiere `empleadoId` (el empleado seleccionado
+  /// en el dropdown del formulario "Nuevo horario"). Antes se mandaba el
+  /// id del jefe logueado como 'user_id', y el backend lo rechazaba con
+  /// 403 ("No puedes registrar actividad para este usuario.").
+  Future<Map<String, dynamic>?> crearNuevaActividad({
+    required String actividad,
+    required int empleadoId, // 👈 NUEVO
+    String descripcion = '',
+    DateTime? fecha,
+  }) async {
+    try {
+      final creada = await _service.crearActividad(
+        actividad: actividad,
+        empleadoId: empleadoId, // 👈 NUEVO
+        descripcion: descripcion,
+        fecha: fecha,
+      );
+      final nueva = {
+        'id': creada['id'],
+        'name': creada['activity'] ?? actividad,
+        'description': creada['description'] ?? descripcion,
+        'date': creada['date'] ?? '',
+      };
+      _actividades.add(nueva);
+      notifyListeners();
+      return nueva;
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      return null;
     }
   }
 

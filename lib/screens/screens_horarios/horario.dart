@@ -4,14 +4,13 @@ import 'package:intl/intl.dart';
 class Horario {
   final int? id;
   final int empleadoId;
-  final String nombre;
+  final String
+  nombre; // solo para UI, NO se manda al backend (la tabla no tiene esta columna)
   final String turno;
 
-  // 👇 CAMBIO: 'actividad' (texto libre) fue reemplazado por la relación
-  // con la tabla 'activities'. Guardamos el id (obligatorio para
-  // crear/editar) y el nombre resuelto (solo para mostrar en pantalla).
+  // Relación con la tabla 'activities'
   final int activityId;
-  final String actividadNombre;
+  final String actividadNombre; // solo para UI, NO se manda al backend
 
   final String entrada;
   final String salida;
@@ -44,7 +43,6 @@ class Horario {
 
   String _formatear(String fechaIso) {
     try {
-      // El backend regresa fechas tipo 'yyyy-MM-dd'
       final fecha = DateTime.parse(fechaIso);
       return DateFormat("d 'de' MMMM yyyy", 'es').format(fecha);
     } catch (_) {
@@ -60,9 +58,6 @@ class Horario {
 
   /// Convierte la respuesta JSON del backend Laravel a un Horario
   factory Horario.fromJson(Map<String, dynamic> json) {
-    //  el nombre del empleado puede venir anidado en 'empleado' con la
-    // llave 'name' o 'nombre' según el endpoint; probamos ambas antes de
-    // rendirnos.
     String nombreResuelto = 'Sin nombre';
     final empleado = json['empleado'];
     if (empleado is Map<String, dynamic>) {
@@ -73,10 +68,6 @@ class Horario {
       nombreResuelto = json['nombre'];
     }
 
-    // 👇 NUEVO: la actividad ahora viene como relación. El backend puede
-    // mandarla anidada como 'activity' (objeto con id/name), o como
-    // 'activity_id' + 'actividad_nombre' sueltos. Probamos todas las
-    // variantes razonables.
     int activityId = 0;
     String actividadNombre = '';
     final activity = json['activity'];
@@ -90,9 +81,7 @@ class Horario {
 
     return Horario(
       id: json['id'],
-      empleadoId: json['empleado_id'] is int
-          ? json['empleado_id']
-          : int.tryParse('${json['empleado_id']}') ?? 0,
+      empleadoId: _idComoInt(json['empleado_id']),
       nombre: nombreResuelto,
       turno: json['turno'] ?? '',
       activityId: activityId,
@@ -108,12 +97,28 @@ class Horario {
     );
   }
 
-  /// Convierte a JSON para enviar al backend (create/update)
+  /// Convierte a JSON para enviar al backend (create/update).
+  /// IMPORTANTE: solo incluye las columnas que existen en la tabla
+  /// `horarios` (empleado_id, turno, activity_id, fecha_inicio, fecha_fin,
+  /// hora_entrada, hora_salida). 'nombre' y 'actividadNombre' son solo
+  /// para mostrar en pantalla y nunca se mandan.
   Map<String, dynamic> toJson() {
+    // Validación defensiva: si algo viene en 0 o vacío, es señal de un
+    // bug en el formulario (dropdown no seleccionado, fecha nula, etc.)
+    // Mejor fallar aquí con un mensaje claro que mandar un 0/'' al
+    // backend y recibir un 500 genérico sin saber por qué.
+    assert(empleadoId != 0, 'empleadoId no puede ser 0 al guardar');
+    assert(activityId != 0, 'activityId no puede ser 0 al guardar');
+    assert(turno.isNotEmpty, 'turno no puede estar vacío al guardar');
+    assert(fechaInicio.isNotEmpty, 'fechaInicio no puede estar vacía');
+    assert(fechaFin.isNotEmpty, 'fechaFin no puede estar vacía');
+    assert(entrada.isNotEmpty, 'hora_entrada no puede estar vacía');
+    assert(salida.isNotEmpty, 'hora_salida no puede estar vacía');
+
     return {
       'empleado_id': empleadoId,
       'turno': turno,
-      'activity_id': activityId, // 👈 antes era 'actividad': actividad
+      'activity_id': activityId,
       'fecha_inicio': fechaInicio,
       'fecha_fin': fechaFin,
       'hora_entrada': entrada,
@@ -121,10 +126,6 @@ class Horario {
     };
   }
 
-  /// IMPORTANTE: todos los parámetros son OPCIONALES y usan `this.campo`
-  /// como valor por defecto. Así puedes llamar copyWith pasando solo el
-  /// campo que quieras cambiar (ej. copyWith(entrada: '08:00')) sin tener
-  /// que repetir el resto de los valores.
   Horario copyWith({
     int? id,
     int? empleadoId,
