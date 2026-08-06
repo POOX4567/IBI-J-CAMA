@@ -38,6 +38,13 @@ class AreaService {
 
   static const _timeout = Duration(seconds: 15);
 
+  // 👇 NUEVO: helper para no repetir "leer id_usuario de SharedPreferences"
+  // en cada método. Centraliza la fuente de verdad del usuario logueado.
+  Future<int> _idUsuarioActual() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
+
   List _extraerLista(String body) {
     final decoded = jsonDecode(body);
     if (decoded is List) return decoded;
@@ -68,8 +75,7 @@ class AreaService {
 
   /// GET /areas
   Future<List<Area>> obtenerAreas() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int idUsuario = prefs.getInt('id') ?? 0;
+    final idUsuario = await _idUsuarioActual();
 
     final uri = Uri.parse(
       '$baseUrl/areas',
@@ -102,8 +108,7 @@ class AreaService {
 
   /// GET /areas/historial
   Future<List<Area>> obtenerHistorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int idUsuario = prefs.getInt('id') ?? 0;
+    final idUsuario = await _idUsuarioActual();
 
     final uri = Uri.parse(
       '$baseUrl/areas/historial',
@@ -124,9 +129,12 @@ class AreaService {
   }
 
   /// GET /areas/resumen-dia
+  /// 👇 CORREGIDO: antes no mandaba 'id_usuario', así que el backend
+  /// calculaba pendientes/en progreso/completadas sobre TODAS las áreas
+  /// de TODOS los usuarios, no solo las tuyas. Ahora manda el mismo
+  /// query param que ya usan obtenerAreas()/obtenerHistorial().
   Future<Map<String, dynamic>> obtenerResumenDia() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int idUsuario = prefs.getInt('id') ?? 0;
+    final idUsuario = await _idUsuarioActual();
 
     final uri = Uri.parse(
       '$baseUrl/areas/resumen-dia',
@@ -146,9 +154,11 @@ class AreaService {
   }
 
   /// GET /areas/productividad-semanal
+  /// 👇 CORREGIDO: mismo problema que resumen-dia — faltaba 'id_usuario',
+  /// por eso traía cultivos/productividad de todos los usuarios en vez
+  /// de solo los tuyos.
   Future<List<Map<String, dynamic>>> obtenerProductividadSemanal() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int idUsuario = prefs.getInt('id') ?? 0;
+    final idUsuario = await _idUsuarioActual();
 
     final uri = Uri.parse(
       '$baseUrl/areas/productividad-semanal',
@@ -252,8 +262,7 @@ class AreaService {
 
   /// GET /employees (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int idUsuario = prefs.getInt('id') ?? 0;
+    final idUsuario = await _idUsuarioActual();
 
     final uri = Uri.parse(
       '$baseUrl/employees',
@@ -282,7 +291,12 @@ class AreaService {
 
   /// GET /invernaderos (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerInvernaderos() async {
-    final uri = Uri.parse('$baseUrl/invernaderos');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/invernaderos',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -305,8 +319,18 @@ class AreaService {
   }
 
   /// GET /cultivos (para el dropdown de "Nueva Área")
+  /// 👇 CORREGIDO: le agrego 'id_usuario' igual que a /employees e
+  /// /invernaderos, para que solo devuelva los cultivos que te
+  /// pertenecen. IMPORTANTE: esto solo funciona si el controlador
+  /// Laravel de /cultivos realmente FILTRA por ese query param — si el
+  /// backend lo ignora, seguirá devolviendo todos los cultivos sin
+  /// importar qué mande el Flutter. Revisa el CultivoController.
   Future<List<Map<String, dynamic>>> obtenerCultivos() async {
-    final uri = Uri.parse('$baseUrl/cultivos');
+    final idUsuario = await _idUsuarioActual();
+    final uri = Uri.parse(
+      '$baseUrl/cultivos',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -319,12 +343,12 @@ class AreaService {
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'user_id':
+                  e['user_id'], // 👈 NUEVO: lo guardamos para filtrar después
             },
           )
           .toList();
     }
-    // Se mantiene el fallback a lista vacía (no throw) porque tu comentario
-    // original indicaba que esta ruta podría no existir todavía.
     debugPrint('⚠️ /cultivos respondió ${res.statusCode}, devolviendo []');
     return [];
   }

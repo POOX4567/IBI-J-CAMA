@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'horario.dart';
 import 'horario_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HorarioProvider extends ChangeNotifier {
   final HorarioService _service = HorarioService();
@@ -18,6 +19,10 @@ class HorarioProvider extends ChangeNotifier {
   List<Horario> get horarios => _horarios;
   List<Map<String, dynamic>> get empleados => _empleados;
   List<Map<String, dynamic>> get actividades => _actividades; // 👈 NUEVO
+  Future<int> _idUsuarioActualParaFiltro() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
 
   String get filtroTurno => _filtroTurno;
   int get totalHorariosActivos => _totalHorariosActivos ?? _horarios.length;
@@ -157,11 +162,16 @@ class HorarioProvider extends ChangeNotifier {
     }
   }
 
+  // horario_provider.dart
   Future<void> cargarEmpleados() async {
     try {
-      _empleados = await _service.obtenerEmpleados();
-      // Si ya había horarios cargados sin nombre, los rellenamos ahora
-      // que tenemos la lista de empleados disponible.
+      final idUsuario =
+          await _idUsuarioActualParaFiltro(); // mismo helper que en AreaProvider
+      final data = await _service.obtenerEmpleados();
+      _empleados = data
+          .where((e) => '${e['parent_id']}' == '$idUsuario')
+          .toList();
+
       if (_horarios.isNotEmpty) {
         _horarios = _rellenarNombres(_horarios);
       }

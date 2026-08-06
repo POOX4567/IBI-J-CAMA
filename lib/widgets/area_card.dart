@@ -112,7 +112,7 @@ class AreaCard extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  '${area.progreso.round()}%',
+                  '${area.progresoPorcentaje}%',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: area.statusColor,

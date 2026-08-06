@@ -38,6 +38,12 @@ class HorarioService {
 
   static const _timeout = Duration(seconds: 15);
 
+  // 👇 NUEVO: helper para no repetir "leer id_usuario de SharedPreferences"
+  Future<int> _idUsuarioActual() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
+
   List _extraerLista(String body) {
     final decoded = jsonDecode(body);
     if (decoded is List) return decoded;
@@ -199,27 +205,20 @@ class HorarioService {
     }
   }
 
+  // horario_service.dart
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
-    // Obtenemos el id del usuario logueado (guardado en el Login)
     final prefs = await SharedPreferences.getInstance();
     final int idUsuario = prefs.getInt('id') ?? 0;
 
-    // Lo mandamos como query param dinámico, NO fijo
     final uri = Uri.parse(
       '$baseUrl/employees',
     ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
 
-    if (kDebugMode) {
-      debugPrint('GET $uri');
-    }
-
+    if (kDebugMode) debugPrint('GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
         .timeout(_timeout);
-
-    if (kDebugMode) {
-      debugPrint('Respuesta (${res.statusCode}): ${res.body}');
-    }
+    if (kDebugMode) debugPrint('Respuesta (${res.statusCode}): ${res.body}');
 
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -229,6 +228,7 @@ class HorarioService {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
               'email': e['correo'] ?? e['email'] ?? '',
+              'parent_id': e['parent_id'], // 👈 NUEVO
             },
           )
           .toList();
@@ -288,12 +288,26 @@ class HorarioService {
   }
 
   // ---------------------------------------------------------------------
-  // ÁREAS (se mantienen igual, solo con headers y timeout agregados)
+  // ÁREAS
+  // 👇 ADVERTENCIA: esta sección duplica funcionalidad que YA vive en
+  // AreaService (area_service.dart). Si nada en tu código llama a
+  // `HorarioService().obtenerResumenDia()` (o las otras 3 de aquí abajo),
+  // esto es código muerto y lo ideal sería borrarlo por completo para
+  // evitar que alguien lo use por error en el futuro (dos fuentes de
+  // verdad para el mismo dato = bugs difíciles de rastrear, como el que
+  // acabamos de investigar). Mientras tanto, le agregué 'id_usuario' para
+  // que, SI algo las está llamando, al menos no manden la petición sin
+  // filtrar.
   // ---------------------------------------------------------------------
 
   Future<List<Map<String, dynamic>>> obtenerHistorialAreas() async {
+    final idUsuario = await _idUsuarioActual();
+    final uri = Uri.parse(
+      '$baseUrl/areas/historial',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     final res = await http
-        .get(Uri.parse('$baseUrl/areas/historial'), headers: await _headers())
+        .get(uri, headers: await _headers())
         .timeout(_timeout);
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
@@ -303,8 +317,13 @@ class HorarioService {
   }
 
   Future<Map<String, dynamic>> obtenerResumenDia() async {
+    final idUsuario = await _idUsuarioActual();
+    final uri = Uri.parse(
+      '$baseUrl/areas/resumen-dia',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     final res = await http
-        .get(Uri.parse('$baseUrl/areas/resumen-dia'), headers: await _headers())
+        .get(uri, headers: await _headers())
         .timeout(_timeout);
     if (res.statusCode == 200) {
       return _extraerMapa(res.body);
@@ -313,11 +332,13 @@ class HorarioService {
   }
 
   Future<List<Map<String, dynamic>>> obtenerProductividadSemanal() async {
+    final idUsuario = await _idUsuarioActual();
+    final uri = Uri.parse(
+      '$baseUrl/areas/productividad-semanal',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     final res = await http
-        .get(
-          Uri.parse('$baseUrl/areas/productividad-semanal'),
-          headers: await _headers(),
-        )
+        .get(uri, headers: await _headers())
         .timeout(_timeout);
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);

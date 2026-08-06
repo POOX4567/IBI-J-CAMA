@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'area.dart';
 import 'area_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// PROVIDER: gestión de estado global para el módulo de Áreas.
 /// Mismo patrón que HorarioProvider: la fuente de datos es la API,
@@ -188,43 +189,80 @@ class AreaProvider extends ChangeNotifier {
       _productividadGeneral = double.tryParse(prodStr);
 
       _productividadSemanal = await _service.obtenerProductividadSemanal();
-
-      // Sin ruta dedicada, derivamos cultivos de productividad-semanal
-      _actualizarCultivosDesdeProductividad();
     } catch (e) {
       error = e.toString();
       _log('cargarEstadisticas', e);
     }
+
+    // 👇 NUEVO: el backend no está filtrando bien por id_usuario en
+    // resumen-dia / productividad-semanal, así que sobreescribimos con
+    // números calculados sobre `_areas`, que YA está filtrada por
+    // `_filtrarPorMisEmpleados`. Esto es la fuente de verdad real.
+    _recalcularLocalmente();
+
     notifyListeners();
   }
 
+  void _recalcularLocalmente() {
+    _pendientes = _areas
+        .where((a) => a.estado.toLowerCase().contains('pendiente'))
+        .length;
+    _enProgresoBackend = _areas
+        .where((a) => a.estado.toLowerCase().contains('progreso'))
+        .length;
+    _completadas = _areas
+        .where((a) => a.estado.toLowerCase().contains('completado'))
+        .length;
+    _requierenSupervision = _areas.where((a) => a.progreso < 0.5).length;
+    _productividadGeneral = _areas.isEmpty
+        ? 0
+        : _areas.map((a) => a.progresoNormalizado).reduce((v, e) => v + e) /
+              _areas.length *
+              100;
+
+    // Solo dejamos en productividadSemanal los cultivos que de verdad
+    // aparecen en tus propias áreas (evita mostrar cultivos de otros
+    // usuarios que vienen del endpoint sin filtrar).
+    final misCultivoIds = _areas
+        .map((a) => a.cultivoId)
+        .whereType<int>()
+        .toSet();
+    if (misCultivoIds.isNotEmpty) {
+      _productividadSemanal = _productividadSemanal
+          .where((item) => misCultivoIds.contains(item['cultivo_id']))
+          .toList();
+    }
+  }
+
   void _actualizarCultivosDesdeProductividad() {
+    if (cultivos.isNotEmpty) return; // ya llegó de /cultivos, no lo pisamos
+
     final vistos = <String>{};
     final lista = <Map<String, dynamic>>[];
 
-    for (final item in _productividadSemanal) {
-      final id = item['cultivo_id'];
-      final key = '$id';
-      if (id == null || vistos.contains(key)) continue;
-      vistos.add(key);
-      lista.add({'id': id, 'name': item['cultivo_nombre'] ?? 'Cultivo #$id'});
+    // 👇 Antes se armaba desde _productividadSemanal (sin filtrar por
+    // usuario). Ahora se arma desde tus propias `_areas`, que sí están
+    // filtradas por `_filtrarPorMisEmpleados`.
+    for (final a in _areas) {
+      final id = a.cultivoId;
+      if (id == null || vistos.contains('$id')) continue;
+      vistos.add('$id');
+      lista.add({'id': id, 'name': a.cultivo});
     }
 
-    // Solo sobreescribe si aún no tenemos cultivos de /cultivos.
-    if (cultivos.isEmpty) {
-      cultivos = lista;
-    }
+    cultivos = lista;
   }
 
   Future<void> cargarHistorial() async {
     isLoading = true;
     notifyListeners();
     try {
+      if (!datosFormularioCargados && !cargandoDatosFormulario) {
+        await cargarDatosDeFormulario();
+      }
       final lista = await _service.obtenerHistorial();
       final conNombres = _rellenarNombres(lista);
-      _historial = _filtrarPorMisEmpleados(
-        conNombres,
-      ); // ← confirma que esto esté
+      _historial = _filtrarPorMisEmpleados(conNombres);
     } catch (e) {
       error = e.toString();
       _log('cargarHistorial', e);
@@ -342,13 +380,11 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
-  // ── Dropdowns del formulario "Nueva Área" ────────────────────────
   Future<void> cargarEmpleadosDisponibles() async {
     try {
       final data = await _service.obtenerEmpleados();
-      empleados = data;
-      // Log de diagnóstico: si el backend respondió pero la lista viene
-      // vacía, lo verás en consola en vez de asumir que "no cargó".
+      empleados =
+          data; // 👈 TEMPORAL: sin filtrar, hasta confirmar si parent_id existe
       _log('cargarEmpleadosDisponibles', 'OK -> ${empleados.length} empleados');
       notifyListeners();
     } catch (e) {
@@ -374,14 +410,20 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
+  Future<int> _idUsuarioActualParaFiltro() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
+
   Future<void> cargarCultivosDisponibles() async {
     try {
       final data = await _service.obtenerCultivos();
-      cultivos = data;
+      cultivos =
+          data; // 👈 TEMPORAL: sin filtrar, hasta confirmar si user_id existe
       _log('cargarCultivosDisponibles', 'OK -> ${cultivos.length} cultivos');
       notifyListeners();
     } catch (e) {
-      error = 'No se pudieron cargar cultivos (falta ruta /cultivos): $e';
+      error = 'No se pudieron cargar cultivos: $e';
       _log('cargarCultivosDisponibles', e);
       notifyListeners();
     }

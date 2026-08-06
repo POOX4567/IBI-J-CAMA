@@ -986,14 +986,14 @@ class _HorariosScreenState extends State<HorariosScreen> {
                       children: [
                         Text(
                           item['cultivo_nombre'] ??
-                              'Cultivo #${item['cultivo_id']}',
+                              nombreCultivo(item['cultivo_id']),
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             color: Color(0xff334155),
                           ),
                         ),
                         Text(
-                          '${valor.round()}%',
+                          '${(valor * 100).round()}%',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: color,

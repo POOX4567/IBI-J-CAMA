@@ -27,6 +27,13 @@ import 'area_provider.dart';
 /// lo cual disparaba un 422 en el POST y la creación NUNCA se
 /// completaba (por eso seguías viendo solo el registro viejo "Sin
 /// área").
+///
+/// 👇 CAMBIO NUEVO (dropdowns Área/Cultivo): antes, si
+/// `areasDisponibles` o `cultivos` venían vacíos (por timeout, CORS,
+/// o falla del backend), el DropdownSearch se abría igual y mostraba
+/// "No data found" sin ninguna explicación ni forma de reintentar.
+/// Ahora, igual que ya pasaba con "Empleado", se muestra un aviso rojo
+/// con botón "Reintentar" que vuelve a llamar solo a ese endpoint.
 Future<void> mostrarModalNuevaArea(
   BuildContext context,
   AreaProvider provider,
@@ -265,38 +272,81 @@ Future<void> mostrarModalNuevaArea(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.areasDisponibles;
-                      return provider.areasDisponibles
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: areaSeleccionada,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar área',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  // 👇 NUEVO: si areasDisponibles llegó vacía (timeout,
+                  // CORS, backend caído), mostramos aviso + reintentar en
+                  // vez de abrir un DropdownSearch mudo con "No data found".
+                  if (provider.areasDisponibles.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se pudieron cargar las áreas. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider
+                                  .cargarAreasDisponiblesParaFormulario();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.areasDisponibles;
+                        return provider.areasDisponibles
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: areaSeleccionada,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar área',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => areaSeleccionada = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => areaSeleccionada = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── CULTIVO ──────────────────────────────────
@@ -309,38 +359,80 @@ Future<void> mostrarModalNuevaArea(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.cultivos;
-                      return provider.cultivos
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: cultivoSeleccionado,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar cultivo',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  // 👇 NUEVO: mismo patrón para Cultivo. Antes /cultivos
+                  // podía fallar en silencio y el usuario solo veía
+                  // "No data found" sin saber que era un error de red.
+                  if (provider.cultivos.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se pudieron cargar los cultivos. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider.cargarCultivosDisponibles();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.cultivos;
+                        return provider.cultivos
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: cultivoSeleccionado,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar cultivo',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => cultivoSeleccionado = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => cultivoSeleccionado = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── ACTIVIDAD ────────────────────────────────
@@ -486,7 +578,9 @@ Future<void> mostrarModalNuevaArea(
 ///   mostrarModalEditarArea(context, areaProvider, area);
 ///
 /// 👇 Mismo cambio que en `mostrarModalNuevaArea`: se asegura de que los
-/// datos de los dropdowns estén cargados antes de construir el formulario.
+/// datos de los dropdowns estén cargados antes de construir el formulario,
+/// y ahora también muestra aviso + reintentar en Área y Cultivo si vienen
+/// vacíos.
 ///
 /// 👇 CAMBIO NUEVO (progreso): igual que al crear, el Slider ahora
 /// SIEMPRE trabaja y envía en escala 0.0-1.0 porque así lo exige el
@@ -674,38 +768,77 @@ Future<void> mostrarModalEditarArea(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.empleados;
-                      return provider.empleados
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: empleadoSeleccionado,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar empleado',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  if (provider.empleados.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No hay empleados disponibles. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider.cargarEmpleadosDisponibles();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.empleados;
+                        return provider.empleados
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: empleadoSeleccionado,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar empleado',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => empleadoSeleccionado = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => empleadoSeleccionado = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── ÁREA ─────────────────────────────────────
@@ -718,38 +851,80 @@ Future<void> mostrarModalEditarArea(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.areasDisponibles;
-                      return provider.areasDisponibles
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: areaSeleccionada,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar área',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  // 👇 NUEVO: aviso + reintentar si areasDisponibles vino
+                  // vacía (mismo problema que causaba "No data found").
+                  if (provider.areasDisponibles.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se pudieron cargar las áreas. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider
+                                  .cargarAreasDisponiblesParaFormulario();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.areasDisponibles;
+                        return provider.areasDisponibles
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: areaSeleccionada,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar área',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => areaSeleccionada = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => areaSeleccionada = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── CULTIVO ──────────────────────────────────
@@ -762,38 +937,78 @@ Future<void> mostrarModalEditarArea(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownSearch<Map<String, dynamic>>(
-                    popupProps: const PopupProps.menu(showSearchBox: true),
-                    items: (filter, loadProps) {
-                      if (filter.isEmpty) return provider.cultivos;
-                      return provider.cultivos
-                          .where(
-                            (e) => (e['name'] ?? '')
-                                .toString()
-                                .toLowerCase()
-                                .contains(filter.toLowerCase()),
-                          )
-                          .toList();
-                    },
-                    compareFn: (a, b) => a['id'] == b['id'],
-                    selectedItem: cultivoSeleccionado,
-                    itemAsString: (e) => e['name'] ?? '',
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        hintText: 'Seleccionar cultivo',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                  // 👇 NUEVO: aviso + reintentar si cultivos vino vacío.
+                  if (provider.cultivos.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se pudieron cargar los cultivos. Verifica la conexión con el servidor.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await provider.cargarCultivosDisponibles();
+                              setStateModal(() {});
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownSearch<Map<String, dynamic>>(
+                      popupProps: const PopupProps.menu(showSearchBox: true),
+                      items: (filter, loadProps) {
+                        if (filter.isEmpty) return provider.cultivos;
+                        return provider.cultivos
+                            .where(
+                              (e) => (e['name'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(filter.toLowerCase()),
+                            )
+                            .toList();
+                      },
+                      compareFn: (a, b) => a['id'] == b['id'],
+                      selectedItem: cultivoSeleccionado,
+                      itemAsString: (e) => e['name'] ?? '',
+                      decoratorProps: DropDownDecoratorProps(
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar cultivo',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                       ),
+                      onSelected: (value) {
+                        setStateModal(() => cultivoSeleccionado = value);
+                      },
                     ),
-                    onSelected: (value) {
-                      setStateModal(() => cultivoSeleccionado = value);
-                    },
-                  ),
                   const SizedBox(height: 16),
 
                   // ── ACTIVIDAD ────────────────────────────────
