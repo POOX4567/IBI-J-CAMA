@@ -4,9 +4,14 @@ import 'package:intl/intl.dart';
 class Horario {
   final int? id;
   final int empleadoId;
-  final String nombre;
+  final String
+  nombre; // solo para UI, NO se manda al backend (la tabla no tiene esta columna)
   final String turno;
-  final String actividad;
+
+  // Relación con la tabla 'activities'
+  final int activityId;
+  final String actividadNombre; // solo para UI, NO se manda al backend
+
   final String entrada;
   final String salida;
   final String fechaInicio;
@@ -17,7 +22,8 @@ class Horario {
     required this.empleadoId,
     required this.nombre,
     required this.turno,
-    required this.actividad,
+    required this.activityId,
+    this.actividadNombre = '',
     required this.entrada,
     required this.salida,
     required this.fechaInicio,
@@ -37,7 +43,6 @@ class Horario {
 
   String _formatear(String fechaIso) {
     try {
-      // El backend regresa fechas tipo 'yyyy-MM-dd'
       final fecha = DateTime.parse(fechaIso);
       return DateFormat("d 'de' MMMM yyyy", 'es').format(fecha);
     } catch (_) {
@@ -45,10 +50,14 @@ class Horario {
     }
   }
 
+  static int _idComoInt(dynamic id) {
+    if (id == null) return 0;
+    if (id is int) return id;
+    return int.tryParse('$id') ?? 0;
+  }
+
   /// Convierte la respuesta JSON del backend Laravel a un Horario
   factory Horario.fromJson(Map<String, dynamic> json) {
-    //  el nombre puede venir anidado en 'empleado' con la llave 'name'
-    // o 'nombre' según el endpoint; probamos ambas antes de rendirnos.
     String nombreResuelto = 'Sin nombre';
     final empleado = json['empleado'];
     if (empleado is Map<String, dynamic>) {
@@ -59,14 +68,24 @@ class Horario {
       nombreResuelto = json['nombre'];
     }
 
+    int activityId = 0;
+    String actividadNombre = '';
+    final activity = json['activity'];
+    if (activity is Map<String, dynamic>) {
+      activityId = _idComoInt(activity['id']);
+      actividadNombre = activity['name'] ?? activity['nombre'] ?? '';
+    } else {
+      activityId = _idComoInt(json['activity_id']);
+      actividadNombre = json['actividad_nombre'] ?? json['activity_name'] ?? '';
+    }
+
     return Horario(
       id: json['id'],
-      empleadoId: json['empleado_id'] is int
-          ? json['empleado_id']
-          : int.tryParse('${json['empleado_id']}') ?? 0,
+      empleadoId: _idComoInt(json['empleado_id']),
       nombre: nombreResuelto,
       turno: json['turno'] ?? '',
-      actividad: json['actividad'] ?? '',
+      activityId: activityId,
+      actividadNombre: actividadNombre,
       entrada: (json['hora_entrada'] ?? '').toString().length >= 5
           ? (json['hora_entrada'] ?? '').toString().substring(0, 5)
           : '',
@@ -78,12 +97,28 @@ class Horario {
     );
   }
 
-  /// Convierte a JSON para enviar al backend (create/update)
+  /// Convierte a JSON para enviar al backend (create/update).
+  /// IMPORTANTE: solo incluye las columnas que existen en la tabla
+  /// `horarios` (empleado_id, turno, activity_id, fecha_inicio, fecha_fin,
+  /// hora_entrada, hora_salida). 'nombre' y 'actividadNombre' son solo
+  /// para mostrar en pantalla y nunca se mandan.
   Map<String, dynamic> toJson() {
+    // Validación defensiva: si algo viene en 0 o vacío, es señal de un
+    // bug en el formulario (dropdown no seleccionado, fecha nula, etc.)
+    // Mejor fallar aquí con un mensaje claro que mandar un 0/'' al
+    // backend y recibir un 500 genérico sin saber por qué.
+    assert(empleadoId != 0, 'empleadoId no puede ser 0 al guardar');
+    assert(activityId != 0, 'activityId no puede ser 0 al guardar');
+    assert(turno.isNotEmpty, 'turno no puede estar vacío al guardar');
+    assert(fechaInicio.isNotEmpty, 'fechaInicio no puede estar vacía');
+    assert(fechaFin.isNotEmpty, 'fechaFin no puede estar vacía');
+    assert(entrada.isNotEmpty, 'hora_entrada no puede estar vacía');
+    assert(salida.isNotEmpty, 'hora_salida no puede estar vacía');
+
     return {
       'empleado_id': empleadoId,
       'turno': turno,
-      'actividad': actividad,
+      'activity_id': activityId,
       'fecha_inicio': fechaInicio,
       'fecha_fin': fechaFin,
       'hora_entrada': entrada,
@@ -91,16 +126,13 @@ class Horario {
     };
   }
 
-  /// IMPORTANTE: todos los parámetros son OPCIONALES y usan `this.campo`
-  /// como valor por defecto. Así puedes llamar copyWith pasando solo el
-  /// campo que quieras cambiar (ej. copyWith(entrada: '08:00')) sin tener
-  /// que repetir el resto de los valores.
   Horario copyWith({
     int? id,
     int? empleadoId,
     String? nombre,
     String? turno,
-    String? actividad,
+    int? activityId,
+    String? actividadNombre,
     String? entrada,
     String? salida,
     String? fechaInicio,
@@ -111,7 +143,8 @@ class Horario {
       empleadoId: empleadoId ?? this.empleadoId,
       nombre: nombre ?? this.nombre,
       turno: turno ?? this.turno,
-      actividad: actividad ?? this.actividad,
+      activityId: activityId ?? this.activityId,
+      actividadNombre: actividadNombre ?? this.actividadNombre,
       entrada: entrada ?? this.entrada,
       salida: salida ?? this.salida,
       fechaInicio: fechaInicio ?? this.fechaInicio,

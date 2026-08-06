@@ -53,8 +53,13 @@ class HorarioCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
+                      // 👇 CORREGIDO: 'actividad' (String libre) ya no
+                      // existe en el modelo; ahora es 'actividadNombre',
+                      // resuelto por el provider a partir de 'activityId'.
                       Text(
-                        horario.actividad,
+                        horario.actividadNombre.isNotEmpty
+                            ? horario.actividadNombre
+                            : 'Sin actividad',
                         style: const TextStyle(
                           color: Colors.black54,
                           fontSize: 14,

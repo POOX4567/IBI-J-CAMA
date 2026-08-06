@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'area.dart';
 import 'area_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// PROVIDER: gestión de estado global para el módulo de Áreas.
 /// Mismo patrón que HorarioProvider: la fuente de datos es la API,
@@ -145,19 +146,29 @@ class AreaProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // ── GET /areas ────────────────────────────────────────────────────
+  /// Filtra una lista de áreas dejando SOLO las que pertenecen a algún
+  /// empleado del catálogo `empleados` (ya filtrado por id_usuario y por
+  /// parent_id). Esto protege la UI aunque el backend no filtre bien
+  /// `/areas` por su cuenta.
+  List<Area> _filtrarPorMisEmpleados(List<Area> lista) {
+    if (empleados.isEmpty) return lista;
+    final idsPermitidos = empleados.map((e) => '${e['id']}').toSet();
+    return lista
+        .where((a) => idsPermitidos.contains('${a.empleadoId}'))
+        .toList();
+  }
+
   Future<void> cargarAreas() async {
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      // Nos aseguramos de tener los catálogos (empleados/áreas/cultivos)
-      // ANTES de rellenar nombres, si aún no se han cargado.
       if (!datosFormularioCargados && !cargandoDatosFormulario) {
         await cargarDatosDeFormulario();
       }
       final lista = await _service.obtenerAreas();
-      _areas = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _areas = _filtrarPorMisEmpleados(conNombres); // ← NUEVO
       await cargarEstadisticas();
     } catch (e) {
       error = e.toString();
@@ -179,41 +190,79 @@ class AreaProvider extends ChangeNotifier {
       _productividadGeneral = double.tryParse(prodStr);
 
       _productividadSemanal = await _service.obtenerProductividadSemanal();
-
-      // Sin ruta dedicada, derivamos cultivos de productividad-semanal
-      _actualizarCultivosDesdeProductividad();
     } catch (e) {
       error = e.toString();
       _log('cargarEstadisticas', e);
     }
+
+    // 👇 El backend no está filtrando bien por id_usuario en
+    // resumen-dia / productividad-semanal, así que sobreescribimos con
+    // números calculados sobre `_areas`, que YA está filtrada por
+    // `_filtrarPorMisEmpleados`. Esto es la fuente de verdad real.
+    _recalcularLocalmente();
+
     notifyListeners();
   }
 
-  void _actualizarCultivosDesdeProductividad() {
-    final vistos = <String>{};
-    final lista = <Map<String, dynamic>>[];
+  void _recalcularLocalmente() {
+    _pendientes = _areas
+        .where((a) => a.estado.toLowerCase().contains('pendiente'))
+        .length;
+    _enProgresoBackend = _areas
+        .where((a) => a.estado.toLowerCase().contains('progreso'))
+        .length;
+    _completadas = _areas
+        .where((a) => a.estado.toLowerCase().contains('completado'))
+        .length;
+    _requierenSupervision = _areas.where((a) => a.progreso < 0.5).length;
+    _productividadGeneral = _areas.isEmpty
+        ? 0
+        : _areas.map((a) => a.progresoNormalizado).reduce((v, e) => v + e) /
+              _areas.length *
+              100;
 
-    for (final item in _productividadSemanal) {
-      final id = item['cultivo_id'];
-      final key = '$id';
-      if (id == null || vistos.contains(key)) continue;
-      vistos.add(key);
-      lista.add({'id': id, 'name': item['cultivo_nombre'] ?? 'Cultivo #$id'});
-    }
-
-    // Solo sobreescribe si aún no tenemos cultivos de /cultivos.
-    if (cultivos.isEmpty) {
-      cultivos = lista;
+    // Solo dejamos en productividadSemanal los cultivos que de verdad
+    // aparecen en tus propias áreas (evita mostrar cultivos de otros
+    // usuarios que vienen del endpoint sin filtrar).
+    final misCultivoIds = _areas
+        .map((a) => a.cultivoId)
+        .whereType<int>()
+        .toSet();
+    if (misCultivoIds.isNotEmpty) {
+      _productividadSemanal = _productividadSemanal
+          .where((item) => misCultivoIds.contains(item['cultivo_id']))
+          .toList();
     }
   }
 
-  // ── GET /areas/historial ───────────────────────────────────────────
+  void _actualizarCultivosDesdeProductividad() {
+    if (cultivos.isNotEmpty) return; // ya llegó de /cultivos, no lo pisamos
+
+    final vistos = <String>{};
+    final lista = <Map<String, dynamic>>[];
+
+    // 👇 Se arma desde tus propias `_areas`, que sí están filtradas por
+    // `_filtrarPorMisEmpleados`.
+    for (final a in _areas) {
+      final id = a.cultivoId;
+      if (id == null || vistos.contains('$id')) continue;
+      vistos.add('$id');
+      lista.add({'id': id, 'name': a.cultivo});
+    }
+
+    cultivos = lista;
+  }
+
   Future<void> cargarHistorial() async {
     isLoading = true;
     notifyListeners();
     try {
+      if (!datosFormularioCargados && !cargandoDatosFormulario) {
+        await cargarDatosDeFormulario();
+      }
       final lista = await _service.obtenerHistorial();
-      _historial = _rellenarNombres(lista);
+      final conNombres = _rellenarNombres(lista);
+      _historial = _filtrarPorMisEmpleados(conNombres);
     } catch (e) {
       error = e.toString();
       _log('cargarHistorial', e);
@@ -331,14 +380,32 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
-  // ── Dropdowns del formulario "Nueva Área" ────────────────────────
+  /// 👇 ACTUALIZADO: filtra por parent_id contra el id del jefe logueado
+  /// como respaldo, por si /employees no filtra bien en el backend. Si
+  /// un empleado NO trae parent_id (viene null), se deja pasar (todavía
+  /// no confirmamos si el backend siempre lo manda). Los prints muestran
+  /// exactamente qué se descartó y por qué, para poder validarlo en vivo.
   Future<void> cargarEmpleadosDisponibles() async {
     try {
+      final idUsuario = await _idUsuarioActualParaFiltro();
       final data = await _service.obtenerEmpleados();
-      empleados = data;
-      // Log de diagnóstico: si el backend respondió pero la lista viene
-      // vacía, lo verás en consola en vez de asumir que "no cargó".
-      _log('cargarEmpleadosDisponibles', 'OK -> ${empleados.length} empleados');
+
+      empleados = data.where((e) {
+        final pid = e['parent_id'];
+        final coincide = pid == null || '$pid' == '$idUsuario';
+        if (!coincide) {
+          debugPrint(
+            '🚫 [AreaProvider] excluido empleado id=${e['id']} '
+            'parent_id=$pid (jefe logueado=$idUsuario)',
+          );
+        }
+        return coincide;
+      }).toList();
+
+      _log(
+        'cargarEmpleadosDisponibles',
+        'OK -> ${empleados.length}/${data.length} empleados (jefe=$idUsuario)',
+      );
       notifyListeners();
     } catch (e) {
       error = 'No se pudieron cargar empleados: $e';
@@ -347,13 +414,35 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
+  /// 👇 ACTUALIZADO: mismo filtro que cultivos — solo deja invernaderos
+  /// cuyo user_id sea el del jefe logueado o el de alguno de sus
+  /// empleados. Requiere que `empleados` ya esté cargado (ver el nuevo
+  /// orden en `cargarDatosDeFormulario`).
   Future<void> cargarAreasDisponiblesParaFormulario() async {
     try {
+      final idUsuario = await _idUsuarioActualParaFiltro();
       final data = await _service.obtenerInvernaderos();
-      areasDisponibles = data;
+
+      final idsPermitidos = <String>{
+        '$idUsuario',
+        ...empleados.map((e) => '${e['id']}'),
+      };
+
+      areasDisponibles = data.where((a) {
+        final uid = a['user_id'];
+        final coincide = uid == null || idsPermitidos.contains('$uid');
+        if (!coincide) {
+          debugPrint(
+            '🚫 [AreaProvider] excluido invernadero id=${a['id']} '
+            'user_id=$uid (permitidos=$idsPermitidos)',
+          );
+        }
+        return coincide;
+      }).toList();
+
       _log(
         'cargarAreasDisponiblesParaFormulario',
-        'OK -> ${areasDisponibles.length} áreas',
+        'OK -> ${areasDisponibles.length}/${data.length} áreas (jefe=$idUsuario)',
       );
       notifyListeners();
     } catch (e) {
@@ -363,14 +452,45 @@ class AreaProvider extends ChangeNotifier {
     }
   }
 
+  Future<int> _idUsuarioActualParaFiltro() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
+
+  /// 👇 ACTUALIZADO: filtra cultivos por user_id, aceptando solo los que
+  /// pertenecen al jefe logueado o a alguno de sus empleados (asumiendo
+  /// que `empleados` YA está cargado antes de llamar este método — ver
+  /// el nuevo orden en `cargarDatosDeFormulario`). Si un cultivo no trae
+  /// user_id, se deja pasar (respaldo por si el campo no siempre viene).
   Future<void> cargarCultivosDisponibles() async {
     try {
+      final idUsuario = await _idUsuarioActualParaFiltro();
       final data = await _service.obtenerCultivos();
-      cultivos = data;
-      _log('cargarCultivosDisponibles', 'OK -> ${cultivos.length} cultivos');
+
+      final idsPermitidos = <String>{
+        '$idUsuario',
+        ...empleados.map((e) => '${e['id']}'),
+      };
+
+      cultivos = data.where((c) {
+        final uid = c['user_id'];
+        final coincide = uid == null || idsPermitidos.contains('$uid');
+        if (!coincide) {
+          debugPrint(
+            '🚫 [AreaProvider] excluido cultivo id=${c['id']} '
+            'user_id=$uid (permitidos=$idsPermitidos)',
+          );
+        }
+        return coincide;
+      }).toList();
+
+      _log(
+        'cargarCultivosDisponibles',
+        'OK -> ${cultivos.length}/${data.length} cultivos (jefe=$idUsuario)',
+      );
       notifyListeners();
     } catch (e) {
-      error = 'No se pudieron cargar cultivos (falta ruta /cultivos): $e';
+      error = 'No se pudieron cargar cultivos: $e';
       _log('cargarCultivosDisponibles', e);
       notifyListeners();
     }
@@ -391,8 +511,13 @@ class AreaProvider extends ChangeNotifier {
     cargandoDatosFormulario = true;
     notifyListeners();
 
+    // 👇 Empleados primero (sin await Future.wait): cargarCultivosDisponibles
+    // necesita la lista `empleados` ya llena para poder filtrar por
+    // user_id. Antes se cargaban los 3 en paralelo y cultivos siempre
+    // llegaba con `empleados` vacío, por lo que nunca filtraba nada.
+    await cargarEmpleadosDisponibles();
+
     await Future.wait([
-      cargarEmpleadosDisponibles(),
       cargarAreasDisponiblesParaFormulario(),
       cargarCultivosDisponibles(),
     ]);

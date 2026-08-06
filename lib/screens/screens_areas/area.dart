@@ -40,8 +40,9 @@ class Area {
   }
 
   // en area.dart
+  // en area.dart
   double get progresoNormalizado => progreso.clamp(0.0, 1.0);
-  int get progresoPorcentaje => progreso.round();
+  int get progresoPorcentaje => (progresoNormalizado * 100).round();
 
   /// Construye un Area a partir del JSON de la API.
   /// Soporta tanto relaciones cargadas (->with('empleado','invernadero','cultivo'))

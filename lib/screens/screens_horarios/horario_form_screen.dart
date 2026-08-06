@@ -8,15 +8,6 @@ import 'package:fluttertoast/fluttertoast.dart'; // FLUTTERTOAST
 import 'horario.dart';
 import 'horario_provider.dart';
 
-/// Modal (Dialog) para CREAR o EDITAR un horario.
-/// Si [horario] es null -> modo creación (todos los campos vacíos).
-/// Si [horario] viene con datos -> modo edición (todos los campos
-/// precargados y editables, incluyendo empleado, turno, actividad,
-/// fechas y horas).
-///
-/// Úsalo con el helper estático `HorarioFormScreen.show(...)`, que ya
-/// se encarga de mostrarlo centrado sobre el resto de la pantalla
-/// (con el fondo oscurecido) usando showDialog.
 class HorarioFormScreen extends StatefulWidget {
   final Horario? horario;
 
@@ -24,9 +15,6 @@ class HorarioFormScreen extends StatefulWidget {
 
   bool get esEdicion => horario != null;
 
-  /// Muestra el formulario como modal centrado.
-  /// Devuelve `true` si se guardó algo (para que la pantalla que llama
-  /// pueda refrescar), o `null`/`false` si se canceló.
   static Future<bool?> show(
     BuildContext context, {
     Horario? horario,
@@ -48,48 +36,60 @@ class HorarioFormScreen extends StatefulWidget {
 
 class _HorarioFormScreenState extends State<HorarioFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _actividadCtrl;
 
   int? _empleadoId;
   String? _empleadoNombre;
   String? _turno;
+
+  // 👇 CAMBIO: ya no hay un TextEditingController de actividad, ahora es
+  // un id que se selecciona de un dropdown (tabla 'activities').
+  int? _activityId;
+
   DateTime? _fechaInicio;
   DateTime? _fechaFin;
   TimeOfDay? _horaEntrada;
   TimeOfDay? _horaSalida;
   bool _guardando = false;
 
-  // ── NUEVO: estado propio para saber si la carga de empleados falló ──────
+  // ── estado propio para saber si la carga de empleados falló ──────
   bool _cargandoEmpleados = false;
   String? _errorEmpleados;
 
-  final _turnos = const ['Matutino', 'Vespertino', 'Nocturno'];
+  // ── NUEVO: estado propio para saber si la carga de actividades falló ──
+  bool _cargandoActividades = false;
+  String? _errorActividades;
+
+  final _turnos = const ['Matutino', 'Vespertino'];
 
   @override
   void initState() {
     super.initState();
 
     final h = widget.horario;
-    _actividadCtrl = TextEditingController(text: h?.actividad ?? '');
 
     if (h != null) {
       // ── Precarga de TODOS los campos en modo edición ──────────────────
       _empleadoId = h.empleadoId;
       _empleadoNombre = h.nombre;
       _turno = h.turno;
+      _activityId = h.activityId == 0 ? null : h.activityId;
       _fechaInicio = _parsearFecha(h.fechaInicio);
       _fechaFin = _parsearFecha(h.fechaFin);
       _horaEntrada = _parsearHora(h.entrada);
       _horaSalida = _parsearHora(h.salida);
     }
 
-    // Asegura que el dropdown de empleados tenga datos frescos
+    // Asegura que los dropdowns de empleados y actividades tengan datos
+    // frescos.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _cargarEmpleados();
+      if (mounted) {
+        _cargarEmpleados();
+        _cargarActividades();
+      }
     });
   }
 
-  // ── NUEVO: carga los empleados y captura/expone cualquier error ────────
+  // ── carga los empleados y captura/expone cualquier error ────────
   Future<void> _cargarEmpleados() async {
     setState(() {
       _cargandoEmpleados = true;
@@ -112,6 +112,155 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
     }
     if (mounted) {
       setState(() => _cargandoEmpleados = false);
+    }
+  }
+
+  // ── carga las actividades (tabla 'activities') y captura/expone
+  // cualquier error, igual que se hace con empleados. ──────────────────
+  Future<void> _cargarActividades() async {
+    setState(() {
+      _cargandoActividades = true;
+      _errorActividades = null;
+    });
+    try {
+      final provider = context.read<HorarioProvider>();
+      await provider.cargarActividades();
+      if (provider.error != null && provider.actividades.isEmpty) {
+        _errorActividades = provider.error;
+      } else if (provider.actividades.isEmpty) {
+        _errorActividades =
+            'El servidor respondió correctamente pero no devolvió ninguna '
+            'actividad. Verifica el endpoint "/activities" en el backend.';
+      }
+    } catch (e) {
+      _errorActividades = 'No se pudo conectar con el servidor: $e';
+    }
+    if (mounted) {
+      setState(() => _cargandoActividades = false);
+    }
+  }
+
+  // ── Diálogo rápido para crear una actividad sin salir del formulario
+  // de horario. Hace POST a /activities (con user_id, activity,
+  // description y date, tal cual la tabla real) vía el provider y, si
+  // sale bien, la deja preseleccionada en el dropdown. ────────────────
+  Future<void> _agregarActividadRapida(HorarioProvider provider) async {
+    final nombreController = TextEditingController();
+    final descripcionController = TextEditingController();
+    DateTime fecha = DateTime.now();
+
+    final creada = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Nueva actividad'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nombreController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Actividad',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descripcionController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Descripción',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () {
+                    picker.DatePicker.showDatePicker(
+                      ctx,
+                      locale: picker.LocaleType.es,
+                      showTitleActions: true,
+                      minTime: DateTime(2020),
+                      maxTime: DateTime(2030),
+                      currentTime: fecha,
+                      onConfirm: (date) {
+                        setDialogState(() => fecha = date);
+                      },
+                    );
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Fecha',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_today_rounded),
+                    ),
+                    child: Text(
+                      DateFormat("d 'de' MMMM yyyy", 'es').format(fecha),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final nombre = nombreController.text.trim();
+                if (nombre.isEmpty) return;
+
+                // 👇 NUEVO: si no hay empleado seleccionado en el form principal,
+                // no se puede crear la actividad (el backend la necesita ligada
+                // a un empleado, no al jefe).
+                if (_empleadoId == null) {
+                  Fluttertoast.showToast(
+                    msg: 'Selecciona primero un empleado arriba',
+                    backgroundColor: Colors.red,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
+                final nueva = await provider.crearNuevaActividad(
+                  actividad: nombre,
+                  empleadoId: _empleadoId!, // 👈 NUEVO
+                  descripcion: descripcionController.text.trim(),
+                  fecha: fecha,
+                );
+                if (ctx.mounted) Navigator.pop(ctx, nueva);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff1B5E20),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (creada != null && mounted) {
+      setState(() => _activityId = _idComoInt(creada['id']));
+      Fluttertoast.showToast(
+        msg: '"${creada['name']}" agregada',
+        backgroundColor: const Color(0xff1B5E20),
+        textColor: Colors.white,
+      );
+    } else if (provider.error != null && mounted) {
+      Fluttertoast.showToast(
+        msg: provider.error ?? 'Error al crear la actividad',
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
     }
   }
 
@@ -193,6 +342,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
 
     if (_empleadoId == null ||
         _turno == null ||
+        _activityId == null ||
         _fechaInicio == null ||
         _fechaFin == null ||
         _horaEntrada == null ||
@@ -224,7 +374,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         empleadoId: _empleadoId!,
         nombre: _empleadoNombre ?? '',
         turno: _turno!,
-        actividad: _actividadCtrl.text.trim(),
+        activityId: _activityId!,
         fechaInicio: DateFormat('yyyy-MM-dd').format(_fechaInicio!),
         fechaFin: DateFormat('yyyy-MM-dd').format(_fechaFin!),
         horaEntrada: _horaParaApi(_horaEntrada!),
@@ -236,7 +386,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         empleadoId: _empleadoId!,
         nombre: _empleadoNombre ?? '',
         turno: _turno!,
-        actividad: _actividadCtrl.text.trim(),
+        activityId: _activityId!,
         fechaInicio: DateFormat('yyyy-MM-dd').format(_fechaInicio!),
         fechaFin: DateFormat('yyyy-MM-dd').format(_fechaFin!),
         horaEntrada: _horaParaApi(_horaEntrada!),
@@ -265,12 +415,6 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
         textColor: Colors.white,
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _actividadCtrl.dispose();
-    super.dispose();
   }
 
   @override
@@ -332,7 +476,7 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── NUEVO: aviso visible si falló la carga de
+                      // ── aviso visible si falló la carga de
                       // empleados, en vez de quedar en silencio ──────────
                       if (_cargandoEmpleados)
                         const Padding(
@@ -385,6 +529,67 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: _cargarEmpleados,
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Reintentar'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // ── aviso visible si falló la carga de
+                      // actividades ──────────────────────────────────────
+                      if (_cargandoActividades)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 14),
+                          child: LinearProgressIndicator(
+                            color: Color(0xff1B5E20),
+                          ),
+                        ),
+                      if (!_cargandoActividades && _errorActividades != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffFDECEA),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'No se pudieron cargar las actividades',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _errorActividades!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _cargarActividades,
                                   icon: const Icon(Icons.refresh, size: 16),
                                   label: const Text('Reintentar'),
                                 ),
@@ -447,19 +652,52 @@ class _HorarioFormScreenState extends State<HorarioFormScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Actividad
-                      TextFormField(
-                        controller: _actividadCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Actividad',
-                          prefixIcon: const Icon(Icons.task_alt),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // ── Actividad: dropdown + botón para agregar una
+                      // nueva al vuelo sin salir del formulario ───────────
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _activityId,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: 'Actividad',
+                                prefixIcon: const Icon(Icons.task_alt),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              items: provider.actividades.map((a) {
+                                final id = _idComoInt(a['id']);
+                                return DropdownMenuItem<int>(
+                                  value: id,
+                                  child: Text(a['name'] ?? 'Sin nombre'),
+                                );
+                              }).toList(),
+                              onChanged: (v) => setState(() => _activityId = v),
+                              validator: (v) =>
+                                  v == null ? 'Selecciona una actividad' : null,
+                            ),
                           ),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Requerido'
-                            : null,
+                          const SizedBox(width: 8),
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xffE8F5E9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.add,
+                                color: Color(0xff1B5E20),
+                              ),
+                              tooltip: 'Nueva actividad',
+                              onPressed: () =>
+                                  _agregarActividadRapida(provider),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 14),
 

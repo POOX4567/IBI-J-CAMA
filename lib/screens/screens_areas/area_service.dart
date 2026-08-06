@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 NUEVO
+import 'package:shared_preferences/shared_preferences.dart'; // ← AGREGAR arriba
 
 import 'area.dart';
 
@@ -37,6 +38,13 @@ class AreaService {
 
   static const _timeout = Duration(seconds: 15);
 
+  // 👇 NUEVO: helper para no repetir "leer id_usuario de SharedPreferences"
+  // en cada método. Centraliza la fuente de verdad del usuario logueado.
+  Future<int> _idUsuarioActual() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('id') ?? 0;
+  }
+
   List _extraerLista(String body) {
     final decoded = jsonDecode(body);
     if (decoded is List) return decoded;
@@ -67,7 +75,12 @@ class AreaService {
 
   /// GET /areas
   Future<List<Area>> obtenerAreas() async {
-    final uri = Uri.parse('$baseUrl/areas');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/areas',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -95,7 +108,12 @@ class AreaService {
 
   /// GET /areas/historial
   Future<List<Area>> obtenerHistorial() async {
-    final uri = Uri.parse('$baseUrl/areas/historial');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/historial',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -111,8 +129,17 @@ class AreaService {
   }
 
   /// GET /areas/resumen-dia
+  /// 👇 CORREGIDO: antes no mandaba 'id_usuario', así que el backend
+  /// calculaba pendientes/en progreso/completadas sobre TODAS las áreas
+  /// de TODOS los usuarios, no solo las tuyas. Ahora manda el mismo
+  /// query param que ya usan obtenerAreas()/obtenerHistorial().
   Future<Map<String, dynamic>> obtenerResumenDia() async {
-    final uri = Uri.parse('$baseUrl/areas/resumen-dia');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/resumen-dia',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -127,8 +154,16 @@ class AreaService {
   }
 
   /// GET /areas/productividad-semanal
+  /// 👇 CORREGIDO: mismo problema que resumen-dia — faltaba 'id_usuario',
+  /// por eso traía cultivos/productividad de todos los usuarios en vez
+  /// de solo los tuyos.
   Future<List<Map<String, dynamic>>> obtenerProductividadSemanal() async {
-    final uri = Uri.parse('$baseUrl/areas/productividad-semanal');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/areas/productividad-semanal',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -227,7 +262,12 @@ class AreaService {
 
   /// GET /employees (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerEmpleados() async {
-    final uri = Uri.parse('$baseUrl/employees');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/employees',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -235,11 +275,16 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw employee[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'parent_id':
+                  e['parent_id'], // 👈 lo guardamos igual, por si acaso
             },
           )
           .toList();
@@ -251,7 +296,12 @@ class AreaService {
 
   /// GET /invernaderos (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerInvernaderos() async {
-    final uri = Uri.parse('$baseUrl/invernaderos');
+    final idUsuario = await _idUsuarioActual();
+
+    final uri = Uri.parse(
+      '$baseUrl/invernaderos',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -259,11 +309,15 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw invernadero[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'user_id': e['user_id'],
             },
           )
           .toList();
@@ -275,7 +329,11 @@ class AreaService {
 
   /// GET /cultivos (para el dropdown de "Nueva Área")
   Future<List<Map<String, dynamic>>> obtenerCultivos() async {
-    final uri = Uri.parse('$baseUrl/cultivos');
+    final idUsuario = await _idUsuarioActual();
+    final uri = Uri.parse(
+      '$baseUrl/cultivos',
+    ).replace(queryParameters: {'id_usuario': idUsuario.toString()});
+
     debugPrint('👉 GET $uri');
     final res = await http
         .get(uri, headers: await _headers())
@@ -283,17 +341,19 @@ class AreaService {
     debugPrint('👈 (${res.statusCode}) ${res.body}');
     if (res.statusCode == 200) {
       final data = _extraerLista(res.body);
+      if (data.isNotEmpty) {
+        debugPrint('👀 raw cultivo[0]: ${data.first}'); // 👈 TEMPORAL
+      }
       return data
           .map<Map<String, dynamic>>(
             (e) => {
               'id': e['id'],
               'name': e['nombre'] ?? e['name'] ?? 'Sin nombre',
+              'user_id': e['user_id'],
             },
           )
           .toList();
     }
-    // Se mantiene el fallback a lista vacía (no throw) porque tu comentario
-    // original indicaba que esta ruta podría no existir todavía.
     debugPrint('⚠️ /cultivos respondió ${res.statusCode}, devolviendo []');
     return [];
   }

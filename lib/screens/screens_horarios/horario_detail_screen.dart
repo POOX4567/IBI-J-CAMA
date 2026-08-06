@@ -230,10 +230,15 @@ class _HorarioDetailScreenState extends State<HorarioDetailScreen> {
             ),
             const SizedBox(height: 10),
 
+            // 👇 CORREGIDO: 'actividad' (String) ya no existe en el modelo.
+            // Ahora se usa 'actividadNombre', que el provider rellena
+            // cruzando 'activityId' contra la lista de /activities.
             _detailCard(
               icon: Icons.construction,
               label: 'Actividad',
-              value: horarioActual.actividad,
+              value: horarioActual.actividadNombre.isNotEmpty
+                  ? horarioActual.actividadNombre
+                  : 'Sin actividad',
               color: const Color(0xff43A047),
             ),
             const SizedBox(height: 10),
